@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/efekaputlu/wispshot/actions/workflows/ci.yml"><img src="https://github.com/efekaputlu/wispshot/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/efekaputlu/wispshot/releases/latest"><img src="https://img.shields.io/github/v/release/efekaputlu/wispshot" alt="Release"></a>
+  <a href="https://github.com/WispShot/wispshot/actions/workflows/ci.yml"><img src="https://github.com/WispShot/wispshot/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/WispShot/wispshot/releases/latest"><img src="https://img.shields.io/github/v/release/WispShot/wispshot" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License: GPL-3.0"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4" alt="Platform: Windows 10 and 11">
   <img src="https://img.shields.io/badge/written%20in-Rust-B7410E" alt="Written in Rust">
@@ -104,7 +104,7 @@ Then:
 The files aren't code-signed yet, so Windows SmartScreen may say it "protected your PC" the first time. Choose
 *More info* > *Run anyway*. Every release lists SHA-256 checksums and is built from this repository by
 [GitHub Actions](.github/workflows/release.yml), with a build provenance attestation you can check with
-`gh attestation verify <file> --repo efekaputlu/wispshot`.
+`gh attestation verify <file> --repo WispShot/wispshot`.
 
 Right-click the tray icon for Settings, where you can change shortcuts, choose where files are saved and turn on
 *Start with Windows*.

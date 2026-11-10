@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/efekaputlu/wispshot/actions/workflows/ci.yml"><img src="https://github.com/efekaputlu/wispshot/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/efekaputlu/wispshot/releases/latest"><img src="https://img.shields.io/github/v/release/efekaputlu/wispshot" alt="Release"></a>
+  <a href="https://github.com/WispShot/wispshot/actions/workflows/ci.yml"><img src="https://github.com/WispShot/wispshot/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/WispShot/wispshot/releases/latest"><img src="https://img.shields.io/github/v/release/WispShot/wispshot" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="Lisans: GPL-3.0"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4" alt="Platform: Windows 10 ve 11">
   <img src="https://img.shields.io/badge/written%20in-Rust-B7410E" alt="Rust ile yazıldı">
@@ -106,7 +106,7 @@ Sonra:
 Dosyalar henüz kod imzalı değil; Windows SmartScreen ilk seferde "bilgisayarınızı korudu" diyebilir. *Ek bilgi* >
 *Yine de çalıştır* deyin. Her sürümde SHA-256 sağlamaları bulunur ve sürümler bu depodan
 [GitHub Actions](.github/workflows/release.yml) ile derlenir; derleme kaynağı belgesini
-`gh attestation verify <dosya> --repo efekaputlu/wispshot` ile doğrulayabilirsiniz.
+`gh attestation verify <dosya> --repo WispShot/wispshot` ile doğrulayabilirsiniz.
 
 Tepsi simgesine sağ tıklayıp Ayarlar'ı açın: kısayolları değiştirebilir, dosyaların nereye kaydedileceğini seçebilir
 ve *Windows ile başlat*'ı açabilirsiniz.

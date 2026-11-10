@@ -1,5 +1,5 @@
 """Generates assets/wispshot.ico (16..256 px PNG frames) with the same mark as the tray
-icon (src/logo.rs) and assets/logo.svg. Pure stdlib: python -I assets/make_icon.py"""
+icon (src/logo.rs) and assets/logo.svg. Pure stdlib: python -I tools/make_icon.py"""
 import os, struct, zlib
 
 C0, C1 = 0x0EA5E9, 0x8B5CF6
@@ -64,6 +64,6 @@ imgs = [render(s) for s in sizes]
 out = struct.pack('<HHH', 0, 1, len(sizes)); off = 6 + 16 * len(sizes)
 for s, d in zip(sizes, imgs):
     out += struct.pack('<BBBBHHII', s % 256, s % 256, 0, 0, 1, 32, len(d), off); off += len(d)
-here = os.path.dirname(os.path.abspath(__file__))
+here = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'assets')
 open(os.path.join(here, 'wispshot.ico'), 'wb').write(out + b''.join(imgs))
 open(os.path.join(here, 'logo-256.png'), 'wb').write(imgs[-1])

@@ -35,8 +35,9 @@ $src = (Resolve-Path (Split-Path $Exe -Parent)).Path
 if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
 Remove-Item $stage -Recurse -Force
 
-# checksums
-Get-ChildItem $dist -File | Where-Object Name -ne "SHA256SUMS.txt" | ForEach-Object {
-  "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
-} | Set-Content -Encoding ascii "$dist/SHA256SUMS.txt"
+# checksums (LF line endings, so `sha256sum -c` works everywhere)
+$sums = Get-ChildItem $dist -File | Where-Object Name -ne "SHA256SUMS.txt" | ForEach-Object {
+  "{0}  {1}`n" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
+}
+[IO.File]::WriteAllText((Join-Path (Resolve-Path $dist) "SHA256SUMS.txt"), -join $sums)
 Get-ChildItem $dist | Select-Object Name, Length

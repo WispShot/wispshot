@@ -89,7 +89,12 @@ fn default_ini() -> String {
         s += &format!("{} = {}\n", d.ini, d.default);
     }
     s += &format!("; {}\npause_in_fullscreen = true\n", t("ini.pause_fullscreen"));
-    s += &format!("\n[output]\n; {}\nsave_dir =\n; {}\nsave_mode = ask\n; {}\nnotify = true\n", t("ini.save_dir"), t("ini.save_mode"), t("ini.notify"));
+    s += &format!(
+        "\n[output]\n; {}\nsave_dir =\n; {}\nsave_mode = ask\n; {}\nnotify = true\n",
+        t("ini.save_dir"),
+        t("ini.save_mode"),
+        t("ini.notify")
+    );
     s += &format!("\n[record]\n; {}\nvideo_dir =\n; {}\nsave_mode = folder\nnotify = true\nfps = 30\ncursor = true\n; {}\nink_fade = true\n", t("ini.video_dir"), t("ini.video_mode"), t("ini.ink_fade"));
     s += &format!("\n[capture]\nmagnifier = true\n; {}\ndetect_elements = false\n", t("ini.detect"));
     s += &format!("\n[keys]\n; {}\n", t("ini.keys"));

@@ -111,8 +111,8 @@ pub fn blur(img: &mut Img, radius: i32) {
             box_v(&tmp, c, w, h, r as usize);
         }
     }
-    for i in 0..w * h {
-        img.px[i] = 0xFF00_0000 | (ch[0][i] << 16) | (ch[1][i] << 8) | ch[2][i];
+    for (i, p) in img.px.iter_mut().enumerate().take(w * h) {
+        *p = 0xFF00_0000 | (ch[0][i] << 16) | (ch[1][i] << 8) | ch[2][i];
     }
 }
 
@@ -126,8 +126,8 @@ fn box_h(src: &[u32], dst: &mut [u32], w: usize, h: usize, r: usize) {
         for i in -(r as isize)..=(r as isize) {
             acc += at(i);
         }
-        for x in 0..w {
-            out[x] = acc / d;
+        for (x, o) in out.iter_mut().enumerate() {
+            *o = acc / d;
             acc += at(x as isize + r as isize + 1);
             acc -= at(x as isize - r as isize);
         }

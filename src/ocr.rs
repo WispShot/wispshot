@@ -16,7 +16,7 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 pub const WM_APP_OCR: u32 = WM_APP + 30;
 
-fn recognize(img: &Img) -> Result<String> {
+pub fn recognize(img: &Img) -> Result<String> {
     unsafe {
         let _ = RoInitialize(RO_INIT_MULTITHREADED);
     }
@@ -133,7 +133,22 @@ pub fn show_result(text: &str, near: RECT) {
             None,
         );
         if let Ok(edit) = edit {
-            let font = CreateFontW((-15.0 * dpi) as i32, 0, 0, 0, 400, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, 0, w!("Segoe UI"));
+            let font = CreateFontW(
+                (-15.0 * dpi) as i32,
+                0,
+                0,
+                0,
+                400,
+                0,
+                0,
+                0,
+                DEFAULT_CHARSET,
+                OUT_DEFAULT_PRECIS,
+                CLIP_DEFAULT_PRECIS,
+                CLEARTYPE_QUALITY,
+                0,
+                w!("Segoe UI"),
+            );
             SendMessageW(edit, WM_SETFONT, Some(WPARAM(font.0 as usize)), Some(LPARAM(1)));
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, font.0 as isize);
             let _ = windows::Win32::UI::Input::KeyboardAndMouse::SetFocus(Some(edit));

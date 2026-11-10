@@ -5,6 +5,11 @@ edition = "2021"
 description = "A tiny, near-zero-overhead screenshot tool for Windows"
 license = "GPL-3.0-or-later"
 authors = ["Efe Kaputlu"]
+repository = "https://github.com/efekaputlu/wispshot"
+readme = "README.md"
+keywords = ["screenshot", "screen-recorder", "windows", "ocr", "annotation"]
+categories = ["multimedia", "gui"]
+publish = false
 
 [dependencies]
 windows-core = "0.62"

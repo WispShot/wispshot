@@ -7,7 +7,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::OnceLock;
 
 /// (code, name shown in Settings, file)
-pub const LANGS: &[(&str, &str, &str)] = &[("en", "English", include_str!("../lang/en.txt")), ("tr", "Türkçe", include_str!("../lang/tr.txt"))];
+pub const LANGS: &[(&str, &str, &str)] =
+    &[("en", "English", include_str!("../lang/en.txt")), ("tr", "Türkçe", include_str!("../lang/tr.txt"))];
 
 static CUR: AtomicUsize = AtomicUsize::new(0);
 static TABLES: [OnceLock<Vec<(&'static str, &'static str)>>; LANGS.len()] = [const { OnceLock::new() }; LANGS.len()];
@@ -25,7 +26,8 @@ fn table(i: usize) -> &'static [(&'static str, &'static str)] {
                 let (k, v) = l.split_once('=')?;
                 let v = v.trim();
                 // "\n" in a value is a line break; only then is a copy needed
-                let v: &'static str = if v.contains("\\n") { Box::leak(v.replace("\\n", "\n").into_boxed_str()) } else { v };
+                let v: &'static str =
+                    if v.contains("\\n") { Box::leak(v.replace("\\n", "\n").into_boxed_str()) } else { v };
                 Some((k.trim(), v))
             })
             .collect();
@@ -41,7 +43,11 @@ fn find(i: usize, key: &str) -> Option<&'static str> {
 
 /// Pick the language: "system" (Windows display language), or a code like "tr".
 pub fn set(setting: &str) {
-    let code = if setting.eq_ignore_ascii_case("system") || setting.is_empty() { system_code() } else { setting.to_ascii_lowercase() };
+    let code = if setting.eq_ignore_ascii_case("system") || setting.is_empty() {
+        system_code()
+    } else {
+        setting.to_ascii_lowercase()
+    };
     let i = LANGS.iter().position(|l| l.0 == code).unwrap_or(0);
     CUR.store(i, Ordering::Relaxed);
 }

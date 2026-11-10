@@ -57,7 +57,8 @@ pub fn is_open() -> bool {
 }
 
 const ACCENT: u32 = 0xFF2B_8CFF;
-const PALETTE: [u32; 8] = [0xFFE5_3935, 0xFFFB_8C00, 0xFFFD_D835, 0xFF43_A047, 0xFF1E_88E5, 0xFF8E_24AA, 0xFF21_2121, 0xFFFF_FFFF];
+const PALETTE: [u32; 8] =
+    [0xFFE5_3935, 0xFFFB_8C00, 0xFFFD_D835, 0xFF43_A047, 0xFF1E_88E5, 0xFF8E_24AA, 0xFF21_2121, 0xFFFF_FFFF];
 
 #[derive(Clone, Copy, PartialEq)]
 enum Btn {
@@ -114,12 +115,30 @@ impl Btn {
 #[derive(Clone, Copy, PartialEq)]
 enum Drag {
     None,
-    Selecting { x0: i32, y0: i32, moved: bool },
-    Moving { dx: i32, dy: i32 },
-    Resizing { edges: u8 },
-    Drawing { x0: f32, y0: f32 },
+    Selecting {
+        x0: i32,
+        y0: i32,
+        moved: bool,
+    },
+    Moving {
+        dx: i32,
+        dy: i32,
+    },
+    Resizing {
+        edges: u8,
+    },
+    Drawing {
+        x0: f32,
+        y0: f32,
+    },
     /// Ctrl+drag on an existing drawing: (lx, ly) last mouse position, (tx, ty) total offset.
-    MovingItem { idx: usize, lx: i32, ly: i32, tx: i32, ty: i32 },
+    MovingItem {
+        idx: usize,
+        lx: i32,
+        ly: i32,
+        tx: i32,
+        ty: i32,
+    },
     /// Selecting inside the open text box with the mouse.
     TextSel,
 }
@@ -228,7 +247,19 @@ pub fn open(mode: Mode, magnifier: bool, deep: bool, veil: Option<HWND>) -> bool
         let _ = GetCursorPos(&mut pt);
         let scale = crate::monitor_dpi(MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST)) as f32 / 96.0;
         let mut sizes = [0f32; 11];
-        for t in [Tool::None, Tool::Rect, Tool::Ellipse, Tool::Arrow, Tool::Line, Tool::Pen, Tool::Marker, Tool::Text, Tool::Counter, Tool::Mosaic, Tool::Blur] {
+        for t in [
+            Tool::None,
+            Tool::Rect,
+            Tool::Ellipse,
+            Tool::Arrow,
+            Tool::Line,
+            Tool::Pen,
+            Tool::Marker,
+            Tool::Text,
+            Tool::Counter,
+            Tool::Mosaic,
+            Tool::Blur,
+        ] {
             sizes[tool_idx(t)] = t.default_size();
         }
         let (ox, oy, w, h) = (vs.left, vs.top, vs.right - vs.left, vs.bottom - vs.top);
@@ -369,7 +400,10 @@ impl Ov {
         if self.rt.is_none() {
             unsafe {
                 let props = D2D1_RENDER_TARGET_PROPERTIES {
-                    pixelFormat: D2D1_PIXEL_FORMAT { format: windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM, alphaMode: D2D1_ALPHA_MODE_IGNORE },
+                    pixelFormat: D2D1_PIXEL_FORMAT {
+                        format: windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM,
+                        alphaMode: D2D1_ALPHA_MODE_IGNORE,
+                    },
                     dpiX: 96.0,
                     dpiY: 96.0,
                     ..Default::default()
@@ -428,7 +462,8 @@ impl Ov {
             let _ = BitBlt(dc, 0, 0, f.w, f.h, Some(mem), 0, 0, SRCCOPY);
             if let Some(r) = self.focus() {
                 SelectObject(mem, HGDIOBJ(f.bright as *mut _));
-                let _ = BitBlt(dc, r.left, r.top, r.right - r.left, r.bottom - r.top, Some(mem), r.left, r.top, SRCCOPY);
+                let _ =
+                    BitBlt(dc, r.left, r.top, r.right - r.left, r.bottom - r.top, Some(mem), r.left, r.top, SRCCOPY);
                 let br = CreateSolidBrush(COLORREF(0x00FF_8C2B));
                 let b = (2.0 * self.scale) as i32;
                 for e in [
@@ -467,7 +502,6 @@ impl Ov {
             capture::fill_children(&mut self.shot.windows, self.shot.ox, self.shot.oy);
         }
         if self.sel.is_none() {
-
             let (x, y) = self.mouse;
             self.hover = capture::detect(&self.shot.windows, x, y, self.deep).map(|r| RECT {
                 left: r.left.max(0),
@@ -484,7 +518,12 @@ impl Ov {
             let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
             let _ = GetMonitorInfoW(m, &mut mi);
             let r = mi.rcMonitor;
-            RECT { left: r.left - self.shot.ox, top: r.top - self.shot.oy, right: r.right - self.shot.ox, bottom: r.bottom - self.shot.oy }
+            RECT {
+                left: r.left - self.shot.ox,
+                top: r.top - self.shot.oy,
+                right: r.right - self.shot.ox,
+                bottom: r.bottom - self.shot.oy,
+            }
         }
     }
 
@@ -497,10 +536,34 @@ impl Ov {
         let bs = 32.0 * s;
         let gap = 6.0 * s;
         let mut row: Vec<Option<Btn>> = vec![];
-        for t in [Tool::Rect, Tool::Ellipse, Tool::Arrow, Tool::Line, Tool::Pen, Tool::Marker, Tool::Text, Tool::Counter, Tool::Mosaic, Tool::Blur] {
+        for t in [
+            Tool::Rect,
+            Tool::Ellipse,
+            Tool::Arrow,
+            Tool::Line,
+            Tool::Pen,
+            Tool::Marker,
+            Tool::Text,
+            Tool::Counter,
+            Tool::Mosaic,
+            Tool::Blur,
+        ] {
             row.push(Some(Btn::Tool(t)));
         }
-        row.extend([None, Some(Btn::Undo), Some(Btn::Redo), None, Some(Btn::Pin), Some(Btn::Ocr), Some(Btn::Record), Some(Btn::Save), Some(Btn::CopyFile), None, Some(Btn::Close), Some(Btn::Copy)]);
+        row.extend([
+            None,
+            Some(Btn::Undo),
+            Some(Btn::Redo),
+            None,
+            Some(Btn::Pin),
+            Some(Btn::Ocr),
+            Some(Btn::Record),
+            Some(Btn::Save),
+            Some(Btn::CopyFile),
+            None,
+            Some(Btn::Close),
+            Some(Btn::Copy),
+        ]);
         let sep = 9.0 * s;
         let width: f32 = row.iter().map(|b| if b.is_some() { bs } else { sep }).sum();
         let show_colors = !matches!(self.tool, Tool::None | Tool::Mosaic | Tool::Blur);
@@ -539,7 +602,10 @@ impl Ov {
 
     fn hit_toolbar(&self, x: i32, y: i32) -> Option<Btn> {
         let (x, y) = (x as f32, y as f32);
-        self.toolbar().into_iter().find(|(r, _)| x >= r.left && x < r.right && y >= r.top && y < r.bottom).map(|(_, b)| b)
+        self.toolbar()
+            .into_iter()
+            .find(|(r, _)| x >= r.left && x < r.right && y >= r.top && y < r.bottom)
+            .map(|(_, b)| b)
     }
 
     fn hit_edges(&self, x: i32, y: i32) -> u8 {
@@ -565,7 +631,7 @@ impl Ov {
     }
 
     fn inside_sel(&self, x: i32, y: i32) -> bool {
-        self.sel.map_or(false, |s| capture::contains(&s, x, y))
+        self.sel.is_some_and(|s| capture::contains(&s, x, y))
     }
 
     // ---------------------------------------------------------------- render
@@ -641,19 +707,37 @@ impl Ov {
                     rt.FillRectangle(&rc(f.right, f.top, iw, f.bottom), &dim);
                     let acc = brush(rt, ACCENT)?;
                     let bw = if self.sel.is_some() { 1.0 * s.max(1.0) } else { 2.0 * s };
-                    rt.DrawRectangle(&rc(f.left - bw / 2.0, f.top - bw / 2.0, f.right + bw / 2.0, f.bottom + bw / 2.0), &acc, bw, None);
+                    rt.DrawRectangle(
+                        &rc(f.left - bw / 2.0, f.top - bw / 2.0, f.right + bw / 2.0, f.bottom + bw / 2.0),
+                        &acc,
+                        bw,
+                        None,
+                    );
                     // size label
                     let mut label = format!("{} × {}", (f.right - f.left) as i32, (f.bottom - f.top) as i32);
                     if self.sel.is_none() && self.drag == Drag::None {
                         label += "   ";
-                        label += &if self.mode == Mode::Record { t("editor.hint_record").to_string() } else { tf("editor.hint_capture", &[&keys::label(K::Copy)]) };
+                        label += &if self.mode == Mode::Record {
+                            t("editor.hint_record").to_string()
+                        } else {
+                            tf("editor.hint_capture", &[&keys::label(K::Copy)])
+                        };
                     }
                     self.label(rt, &label, f.left, f.top - 24.0 * s, true)?;
                     if self.sel.is_some() {
                         let hs = 3.5 * s.max(1.0);
                         let white = brush(rt, 0xFFFF_FFFF)?;
                         let (mx, my) = ((f.left + f.right) / 2.0, (f.top + f.bottom) / 2.0);
-                        for (x, y) in [(f.left, f.top), (mx, f.top), (f.right, f.top), (f.left, my), (f.right, my), (f.left, f.bottom), (mx, f.bottom), (f.right, f.bottom)] {
+                        for (x, y) in [
+                            (f.left, f.top),
+                            (mx, f.top),
+                            (f.right, f.top),
+                            (f.left, my),
+                            (f.right, my),
+                            (f.left, f.bottom),
+                            (mx, f.bottom),
+                            (f.right, f.bottom),
+                        ] {
                             let r = rc(x - hs, y - hs, x + hs, y + hs);
                             rt.FillRectangle(&r, &white);
                             rt.DrawRectangle(&r, &acc, 1.0, None);
@@ -686,7 +770,8 @@ impl Ov {
                 rt.DrawRectangle(&r, &dark, 3.0 * s.max(1.0), None);
                 rt.DrawRectangle(&r, &acc, 1.5 * s.max(1.0), None);
                 if self.drag == Drag::None {
-                    let tip = if matches!(it, Item::Text { .. }) { t("editor.picked_text") } else { t("editor.picked") };
+                    let tip =
+                        if matches!(it, Item::Text { .. }) { t("editor.picked_text") } else { t("editor.picked") };
                     let below = r.bottom + 6.0 * s;
                     let y = if below + 30.0 * s > ih { r.top - 30.0 * s } else { below };
                     self.label(rt, tip, r.left.max(2.0), y, false)?;
@@ -720,7 +805,14 @@ impl Ov {
             let rr = D2D1_ROUNDED_RECT { rect: r, radiusX: 3.0 * s, radiusY: 3.0 * s };
             rt.FillRoundedRectangle(&rr, &bg);
             let w: Vec<u16> = text.encode_utf16().collect();
-            rt.DrawText(&w, f, &rc(x + 6.0 * s, y + 3.0 * s, r.right, r.bottom), &fg, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+            rt.DrawText(
+                &w,
+                f,
+                &rc(x + 6.0 * s, y + 3.0 * s, r.right, r.bottom),
+                &fg,
+                D2D1_DRAW_TEXT_OPTIONS_NONE,
+                DWRITE_MEASURING_MODE_NATURAL,
+            );
         }
         Ok(())
     }
@@ -759,17 +851,35 @@ impl Ov {
             rt.DrawRectangle(&rc(c0, r0, c0 + cell, r0 + cell), &white, 1.0, None);
             rt.DrawRectangle(&dst, &white, 1.0, None);
             let p = self.shot.img.get(mx, my);
-            let info = format!("{}, {}   #{:06X}\n{}", mx + self.shot.ox, my + self.shot.oy, p & 0xFF_FFFF, tf("editor.copy_color_hint", &[&keys::label(K::PickColor)]));
+            let info = format!(
+                "{}, {}   #{:06X}\n{}",
+                mx + self.shot.ox,
+                my + self.shot.oy,
+                p & 0xFF_FFFF,
+                tf("editor.copy_color_hint", &[&keys::label(K::PickColor)])
+            );
             let ir = rc(x, y + size, x + size, y + size + info_h);
             let ibg = brush(rt, 0xE61E_1E1E)?;
             rt.FillRectangle(&ir, &ibg);
             let sw = brush(rt, 0xFF00_0000 | p)?;
             let sq = 12.0 * s;
             rt.FillRectangle(&rc(x + 6.0 * s, ir.top + 6.0 * s, x + 6.0 * s + sq, ir.top + 6.0 * s + sq), &sw);
-            rt.DrawRectangle(&rc(x + 6.0 * s, ir.top + 6.0 * s, x + 6.0 * s + sq, ir.top + 6.0 * s + sq), &white, 1.0, None);
+            rt.DrawRectangle(
+                &rc(x + 6.0 * s, ir.top + 6.0 * s, x + 6.0 * s + sq, ir.top + 6.0 * s + sq),
+                &white,
+                1.0,
+                None,
+            );
             if let Some(f) = &self.fmt_ui {
                 let w: Vec<u16> = info.encode_utf16().collect();
-                rt.DrawText(&w, f, &rc(x + 24.0 * s, ir.top + 4.0 * s, ir.right, ir.bottom), &white, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+                rt.DrawText(
+                    &w,
+                    f,
+                    &rc(x + 24.0 * s, ir.top + 4.0 * s, ir.right, ir.bottom),
+                    &white,
+                    D2D1_DRAW_TEXT_OPTIONS_NONE,
+                    DWRITE_MEASURING_MODE_NATURAL,
+                );
             }
         }
         Ok(())
@@ -800,7 +910,11 @@ impl Ov {
             }
             for r in rows {
                 let pad = 3.0 * s;
-                let rr = D2D1_ROUNDED_RECT { rect: rc(r.left - pad, r.top - pad, r.right + pad, r.bottom + pad), radiusX: 6.0 * s, radiusY: 6.0 * s };
+                let rr = D2D1_ROUNDED_RECT {
+                    rect: rc(r.left - pad, r.top - pad, r.right + pad, r.bottom + pad),
+                    radiusX: 6.0 * s,
+                    radiusY: 6.0 * s,
+                };
                 rt.FillRoundedRectangle(&rr, &bg);
             }
             let icon = |ch: &str, r: &D2D_RECT_F, b: &ID2D1SolidColorBrush| {
@@ -813,9 +927,15 @@ impl Ov {
                 let inner = rc(r.left + 2.0 * s, r.top + 2.0 * s, r.right - 2.0 * s, r.bottom - 2.0 * s);
                 let active = matches!(b, Btn::Tool(t) if *t == self.tool);
                 if active {
-                    rt.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect: inner, radiusX: 4.0 * s, radiusY: 4.0 * s }, &act);
+                    rt.FillRoundedRectangle(
+                        &D2D1_ROUNDED_RECT { rect: inner, radiusX: 4.0 * s, radiusY: 4.0 * s },
+                        &act,
+                    );
                 } else if self.tb_hover == Some(*b) {
-                    rt.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect: inner, radiusX: 4.0 * s, radiusY: 4.0 * s }, &hov);
+                    rt.FillRoundedRectangle(
+                        &D2D1_ROUNDED_RECT { rect: inner, radiusX: 4.0 * s, radiusY: 4.0 * s },
+                        &hov,
+                    );
                 }
                 let (cx, cy) = ((r.left + r.right) / 2.0, (r.top + r.bottom) / 2.0);
                 let u = 5.5 * s;
@@ -823,10 +943,21 @@ impl Ov {
                     Btn::Tool(Tool::Rect) => icon("\u{E739}", r, &fg),
                     Btn::Tool(Tool::Ellipse) => icon("\u{EA3A}", r, &fg),
                     Btn::Tool(Tool::Arrow) => {
-                        let it = Item::Arrow { a: (cx - u * 1.3, cy + u * 1.3), b: (cx + u * 1.3, cy - u * 1.3), c: 0xFFF0_F0F0, w: 1.6 * s };
+                        let it = Item::Arrow {
+                            a: (cx - u * 1.3, cy + u * 1.3),
+                            b: (cx + u * 1.3, cy - u * 1.3),
+                            c: 0xFFF0_F0F0,
+                            w: 1.6 * s,
+                        };
                         draw_item(&self.g, rt, &it, false)?;
                     }
-                    Btn::Tool(Tool::Line) => rt.DrawLine(pt(cx - u * 1.3, cy + u * 1.3), pt(cx + u * 1.3, cy - u * 1.3), &fg, 1.6 * s, &self.g.round),
+                    Btn::Tool(Tool::Line) => rt.DrawLine(
+                        pt(cx - u * 1.3, cy + u * 1.3),
+                        pt(cx + u * 1.3, cy - u * 1.3),
+                        &fg,
+                        1.6 * s,
+                        &self.g.round,
+                    ),
                     Btn::Tool(Tool::Pen) => icon("\u{E70F}", r, &fg),
                     Btn::Tool(Tool::Marker) => icon("\u{E7E6}", r, &fg),
                     Btn::Tool(Tool::Text) => icon("\u{E8D2}", r, &fg),
@@ -836,7 +967,14 @@ impl Ov {
                         if let Ok(f) = self.g.text_format(11.0 * s, true) {
                             let _ = f.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
                             let _ = f.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-                            rt.DrawText(&[b'1' as u16], &f, r, &fg, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+                            rt.DrawText(
+                                &[b'1' as u16],
+                                &f,
+                                r,
+                                &fg,
+                                D2D1_DRAW_TEXT_OPTIONS_NONE,
+                                DWRITE_MEASURING_MODE_NATURAL,
+                            );
                         }
                     }
                     Btn::Tool(Tool::Mosaic) => {
@@ -872,12 +1010,26 @@ impl Ov {
                             let w: Vec<u16> = "OCR".encode_utf16().collect();
                             rt.DrawText(&w, &f, r, &fg, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
                         }
-                        rt.DrawRoundedRectangle(&D2D1_ROUNDED_RECT { rect: rc(cx - u * 1.6, cy - u * 1.1, cx + u * 1.6, cy + u * 1.1), radiusX: 2.0 * s, radiusY: 2.0 * s }, &fg, 1.0 * s, None);
+                        rt.DrawRoundedRectangle(
+                            &D2D1_ROUNDED_RECT {
+                                rect: rc(cx - u * 1.6, cy - u * 1.1, cx + u * 1.6, cy + u * 1.1),
+                                radiusX: 2.0 * s,
+                                radiusY: 2.0 * s,
+                            },
+                            &fg,
+                            1.0 * s,
+                            None,
+                        );
                     }
                     Btn::Record => {
                         let red = brush(rt, 0xFFFF_4040)?;
                         rt.FillEllipse(&D2D1_ELLIPSE { point: pt(cx, cy), radiusX: u * 1.1, radiusY: u * 1.1 }, &red);
-                        rt.DrawEllipse(&D2D1_ELLIPSE { point: pt(cx, cy), radiusX: u * 1.6, radiusY: u * 1.6 }, &fg, 1.2 * s, None);
+                        rt.DrawEllipse(
+                            &D2D1_ELLIPSE { point: pt(cx, cy), radiusX: u * 1.6, radiusY: u * 1.6 },
+                            &fg,
+                            1.2 * s,
+                            None,
+                        );
                     }
                     Btn::Save => icon("\u{E74E}", r, &fg),
                     Btn::CopyFile => icon("\u{E8A5}", r, &fg),
@@ -889,11 +1041,33 @@ impl Ov {
                     Btn::Color(i) => {
                         let cb = brush(rt, PALETTE[*i])?;
                         let rr = rc(cx - u * 1.2, cy - u * 1.2, cx + u * 1.2, cy + u * 1.2);
-                        rt.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect: rr, radiusX: 3.0 * s, radiusY: 3.0 * s }, &cb);
+                        rt.FillRoundedRectangle(
+                            &D2D1_ROUNDED_RECT { rect: rr, radiusX: 3.0 * s, radiusY: 3.0 * s },
+                            &cb,
+                        );
                         if *i == self.color {
-                            rt.DrawRoundedRectangle(&D2D1_ROUNDED_RECT { rect: rc(rr.left - 3.0 * s, rr.top - 3.0 * s, rr.right + 3.0 * s, rr.bottom + 3.0 * s), radiusX: 4.0 * s, radiusY: 4.0 * s }, &fg, 1.5 * s, None);
+                            rt.DrawRoundedRectangle(
+                                &D2D1_ROUNDED_RECT {
+                                    rect: rc(
+                                        rr.left - 3.0 * s,
+                                        rr.top - 3.0 * s,
+                                        rr.right + 3.0 * s,
+                                        rr.bottom + 3.0 * s,
+                                    ),
+                                    radiusX: 4.0 * s,
+                                    radiusY: 4.0 * s,
+                                },
+                                &fg,
+                                1.5 * s,
+                                None,
+                            );
                         } else if PALETTE[*i] == 0xFF21_2121 {
-                            rt.DrawRoundedRectangle(&D2D1_ROUNDED_RECT { rect: rr, radiusX: 3.0 * s, radiusY: 3.0 * s }, &dis, 1.0, None);
+                            rt.DrawRoundedRectangle(
+                                &D2D1_ROUNDED_RECT { rect: rr, radiusX: 3.0 * s, radiusY: 3.0 * s },
+                                &dis,
+                                1.0,
+                                None,
+                            );
                         }
                     }
                 }
@@ -901,12 +1075,23 @@ impl Ov {
             // size readout on the colour row
             if let Some((r, _)) = tb.iter().rev().find(|(_, b)| matches!(b, Btn::Color(7))) {
                 if let Some(f) = &self.fmt_ui {
-                    let txt = format!("  {}: {:.0}", if self.tool == Tool::Text { t("editor.font_size") } else { t("editor.width") }, self.size());
+                    let txt = format!(
+                        "  {}: {:.0}",
+                        if self.tool == Tool::Text { t("editor.font_size") } else { t("editor.width") },
+                        self.size()
+                    );
                     let w: Vec<u16> = txt.encode_utf16().collect();
                     let (tw, _) = self.g.measure(&txt, f);
                     let bgr = rc(r.right + 3.0 * s, r.top - 3.0 * s, r.right + tw + 12.0 * s, r.bottom + 3.0 * s);
                     rt.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect: bgr, radiusX: 6.0 * s, radiusY: 6.0 * s }, &bg);
-                    rt.DrawText(&w, f, &rc(r.right + 4.0 * s, r.top + 8.0 * s, r.right + tw + 12.0 * s, r.bottom), &fg, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+                    rt.DrawText(
+                        &w,
+                        f,
+                        &rc(r.right + 4.0 * s, r.top + 8.0 * s, r.right + tw + 12.0 * s, r.bottom),
+                        &fg,
+                        D2D1_DRAW_TEXT_OPTIONS_NONE,
+                        DWRITE_MEASURING_MODE_NATURAL,
+                    );
                 }
             }
             if let Some(h) = self.tb_hover {
@@ -935,7 +1120,12 @@ impl Ov {
             // no click needed: Ctrl+C / Enter etc. take the detected window as it is
             self.sel = Some(sel);
             self.commit_text();
-            done.rect = RECT { left: sel.left + self.shot.ox, top: sel.top + self.shot.oy, right: sel.right + self.shot.ox, bottom: sel.bottom + self.shot.oy };
+            done.rect = RECT {
+                left: sel.left + self.shot.ox,
+                top: sel.top + self.shot.oy,
+                right: sel.right + self.shot.ox,
+                bottom: sel.bottom + self.shot.oy,
+            };
             let geo = (sel.left, sel.top, sel.right - sel.left, sel.bottom - sel.top);
             done.img = match action {
                 Action::Record => None,
@@ -1144,7 +1334,11 @@ impl Ov {
     fn update_hot(&mut self) -> bool {
         let ctrl = unsafe { GetKeyState(VK_CONTROL.0 as i32) < 0 };
         let (x, y) = self.mouse;
-        let hot = if ctrl && self.sel.is_some() && self.text.is_none() && self.drag == Drag::None { self.item_at(x, y) } else { None };
+        let hot = if ctrl && self.sel.is_some() && self.text.is_none() && self.drag == Drag::None {
+            self.item_at(x, y)
+        } else {
+            None
+        };
         std::mem::replace(&mut self.hot, hot) != hot
     }
 
@@ -1251,11 +1445,19 @@ impl Ov {
                     return;
                 }
                 Tool::Counter => {
-                    let n = self.items.iter().filter_map(|i| if let Item::Counter { n, .. } = i { Some(*n) } else { None }).max().unwrap_or(0) + 1;
+                    let n = self
+                        .items
+                        .iter()
+                        .filter_map(|i| if let Item::Counter { n, .. } = i { Some(*n) } else { None })
+                        .max()
+                        .unwrap_or(0)
+                        + 1;
                     self.push(Item::Counter { x: fx, y: fy, n, c, size: w });
                     return;
                 }
-                Tool::Pen | Tool::Marker => self.cur = Some(Item::Pen { pts: vec![(fx, fy)], c, w, marker: self.tool == Tool::Marker }),
+                Tool::Pen | Tool::Marker => {
+                    self.cur = Some(Item::Pen { pts: vec![(fx, fy)], c, w, marker: self.tool == Tool::Marker })
+                }
                 // freehand brush; Shift + drag selects a rectangle instead (cur stays None)
                 Tool::Mosaic | Tool::Blur if unsafe { GetKeyState(VK_SHIFT.0 as i32) >= 0 } => {
                     if let Some(e) = self.effect() {
@@ -1333,19 +1535,26 @@ impl Ov {
                     Tool::Rect | Tool::Ellipse => {
                         let b = self.constrain(x0, y0, fx, fy, true);
                         let r = norm((x0, y0), b);
-                        self.cur = Some(if self.tool == Tool::Rect { Item::Rect { r, c, w } } else { Item::Ellipse { r, c, w } });
+                        self.cur = Some(if self.tool == Tool::Rect {
+                            Item::Rect { r, c, w }
+                        } else {
+                            Item::Ellipse { r, c, w }
+                        });
                     }
                     Tool::Arrow | Tool::Line => {
                         let b = self.constrain(x0, y0, fx, fy, false);
-                        self.cur = Some(if self.tool == Tool::Arrow { Item::Arrow { a: (x0, y0), b, c, w } } else { Item::Line { a: (x0, y0), b, c, w } });
+                        self.cur = Some(if self.tool == Tool::Arrow {
+                            Item::Arrow { a: (x0, y0), b, c, w }
+                        } else {
+                            Item::Line { a: (x0, y0), b, c, w }
+                        });
                     }
                     Tool::Mosaic | Tool::Blur | Tool::Pen | Tool::Marker => match self.cur.as_mut() {
-                        Some(Item::Fx { shape: FxShape::Stroke { pts, .. }, .. }) | Some(Item::Pen { pts, .. }) => {
+                        Some(Item::Fx { shape: FxShape::Stroke { pts, .. }, .. }) | Some(Item::Pen { pts, .. })
                             // skip sub-pixel moves
-                            if pts.last().map_or(true, |l| (l.0 - fx).abs() + (l.1 - fy).abs() >= 1.5) {
+                            if pts.last().is_none_or(|l| (l.0 - fx).abs() + (l.1 - fy).abs() >= 1.5) => {
                                 pts.push((fx, fy));
                             }
-                        }
                         _ => {}
                     },
                     _ => {}
@@ -1379,7 +1588,12 @@ impl Ov {
             }
             Drag::Resizing { .. } => {
                 if let Some(s) = self.sel.as_mut() {
-                    let n = RECT { left: s.left.min(s.right), top: s.top.min(s.bottom), right: s.left.max(s.right), bottom: s.top.max(s.bottom) };
+                    let n = RECT {
+                        left: s.left.min(s.right),
+                        top: s.top.min(s.bottom),
+                        right: s.left.max(s.right),
+                        bottom: s.top.max(s.bottom),
+                    };
                     *s = n;
                     if s.right - s.left < 2 || s.bottom - s.top < 2 {
                         self.sel = None;
@@ -1404,7 +1618,10 @@ impl Ov {
                         let b = r.bottom.min(sel.bottom);
                         if rr - l >= 2 && b - t >= 2 {
                             if let Some(fx) = self.effect() {
-                                self.push(Item::Fx { fx, shape: FxShape::Rect(rc(l as f32, t as f32, rr as f32, b as f32)) });
+                                self.push(Item::Fx {
+                                    fx,
+                                    shape: FxShape::Rect(rc(l as f32, t as f32, rr as f32, b as f32)),
+                                });
                             }
                         }
                     }
@@ -1412,8 +1629,12 @@ impl Ov {
                 _ => {
                     if let Some(it) = self.cur.take() {
                         let keep = match &it {
-                            Item::Rect { r, .. } | Item::Ellipse { r, .. } => r.right - r.left >= 2.0 || r.bottom - r.top >= 2.0,
-                            Item::Arrow { a, b, .. } | Item::Line { a, b, .. } => (a.0 - b.0).abs() + (a.1 - b.1).abs() >= 3.0,
+                            Item::Rect { r, .. } | Item::Ellipse { r, .. } => {
+                                r.right - r.left >= 2.0 || r.bottom - r.top >= 2.0
+                            }
+                            Item::Arrow { a, b, .. } | Item::Line { a, b, .. } => {
+                                (a.0 - b.0).abs() + (a.1 - b.1).abs() >= 3.0
+                            }
                             _ => true,
                         };
                         if keep {
@@ -1455,7 +1676,13 @@ impl Ov {
                     let right = vkk == VK_RIGHT;
                     let (a, b) = te.range();
                     let to = match (ctrl, right) {
-                        _ if te.has_sel() && !shift && !ctrl => if right { b } else { a },
+                        _ if te.has_sel() && !shift && !ctrl => {
+                            if right {
+                                b
+                            } else {
+                                a
+                            }
+                        }
                         (true, false) => te.word_left(te.caret),
                         (true, true) => te.word_right(te.caret),
                         (false, false) => te.prev(te.caret),
@@ -1527,7 +1754,9 @@ impl Ov {
                 return true;
             }
             if keys::pressed(Scope::Editor, vk) == Some(K::EditText) {
-                if let Some(b) = self.items.get(idx).filter(|i| matches!(i, Item::Text { .. })).map(|i| i.bounds(&self.g)) {
+                if let Some(b) =
+                    self.items.get(idx).filter(|i| matches!(i, Item::Text { .. })).map(|i| i.bounds(&self.g))
+                {
                     if self.edit_text_at(((b.left + b.right) / 2.0) as i32, ((b.top + b.bottom) / 2.0) as i32) {
                         if let Some(te) = self.text.as_mut() {
                             te.select_all();
@@ -1686,15 +1915,26 @@ impl Ov {
     fn draw_brush_preview(&self, rt: &ID2D1RenderTarget) -> Result<()> {
         let (mx, my) = self.mouse;
         let drawing = matches!(self.drag, Drag::Drawing { .. });
-        if self.sel.is_none() || self.tool == Tool::None || !(drawing || self.drag == Drag::None && self.inside_sel(mx, my)) {
+        if self.sel.is_none()
+            || self.tool == Tool::None
+            || !(drawing || self.drag == Drag::None && self.inside_sel(mx, my))
+        {
             return Ok(());
         }
         let size = self.size();
         let (x, y) = (mx as f32 + 0.5, my as f32 + 0.5);
         let r = match self.tool {
             Tool::Counter => Some(size),
-            Tool::Mosaic | Tool::Blur if unsafe { GetKeyState(VK_SHIFT.0 as i32) >= 0 } && (!drawing || self.cur.is_some()) => Some(size / 2.0),
-            Tool::Rect | Tool::Ellipse | Tool::Arrow | Tool::Line | Tool::Pen | Tool::Marker if !drawing || self.size_hint => Some((size / 2.0).max(1.0)),
+            Tool::Mosaic | Tool::Blur
+                if unsafe { GetKeyState(VK_SHIFT.0 as i32) >= 0 } && (!drawing || self.cur.is_some()) =>
+            {
+                Some(size / 2.0)
+            }
+            Tool::Rect | Tool::Ellipse | Tool::Arrow | Tool::Line | Tool::Pen | Tool::Marker
+                if !drawing || self.size_hint =>
+            {
+                Some((size / 2.0).max(1.0))
+            }
             _ => None,
         };
         unsafe {
@@ -1777,11 +2017,25 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
         return DefWindowProcW(hwnd, msg, wp, lp);
     }
     // Any real input before Direct2D is up: finish initialisation first (input is never lost).
-    if !ov.ready && matches!(msg, WM_LBUTTONDOWN | WM_LBUTTONUP | WM_LBUTTONDBLCLK | WM_RBUTTONUP | WM_MOUSEWHEEL | WM_KEYDOWN | WM_SYSKEYDOWN | WM_CHAR) {
+    if !ov.ready
+        && matches!(
+            msg,
+            WM_LBUTTONDOWN
+                | WM_LBUTTONUP
+                | WM_LBUTTONDBLCLK
+                | WM_RBUTTONUP
+                | WM_MOUSEWHEEL
+                | WM_KEYDOWN
+                | WM_SYSKEYDOWN
+                | WM_CHAR
+        )
+    {
         ov.init_d2d();
     }
     // Mouse events replayed from the veil: the veil holds the capture until release.
-    let forwarded = matches!(msg, WM_MOUSEMOVE | WM_LBUTTONDOWN | WM_LBUTTONUP | WM_LBUTTONDBLCLK | WM_RBUTTONDOWN | WM_RBUTTONUP) && wp.0 & crate::veil::FORWARDED != 0;
+    let forwarded =
+        matches!(msg, WM_MOUSEMOVE | WM_LBUTTONDOWN | WM_LBUTTONUP | WM_LBUTTONDBLCLK | WM_RBUTTONDOWN | WM_RBUTTONUP)
+            && wp.0 & crate::veil::FORWARDED != 0;
     let wp = if forwarded { WPARAM(wp.0 & !crate::veil::FORWARDED) } else { wp };
     ov.forwarded = forwarded;
     let redraw = |ov: &Ov| {

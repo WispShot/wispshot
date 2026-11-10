@@ -1,13 +1,13 @@
 //! WispShot — a screenshot tool that is (almost) not there.
 //!
 //! Two kinds of process, same executable:
-//!   * resident  — tray icon + global hotkeys only. One hidden window blocked in
-//!                 GetMessage: no polling, ~2 MB private memory. The only hook is an
-//!                 out-of-context foreground-change event (for "pause in full screen").
-//!   * session   — `wispshot.exe --session capture|record|pin`, spawned per action. Owns
-//!                 everything heavy (Direct2D, WIC, OCR, H.264 encoder, pins) and exits
-//!                 as soon as its last window closes, so GPU-driver caches and all other
-//!                 memory go back to the OS. A crash there never takes the tray down.
+//! - **resident**: tray icon + global hotkeys only. One hidden window blocked in
+//!   GetMessage: no polling, ~2 MB private memory. The only hook is an
+//!   out-of-context foreground-change event (for "pause in full screen").
+//! - **session**: `wispshot.exe --session capture|record|pin`, spawned per action. Owns
+//!   everything heavy (Direct2D, WIC, OCR, H.264 encoder, pins) and exits
+//!   as soon as its last window closes, so GPU-driver caches and all other
+//!   memory go back to the OS. A crash there never takes the tray down.
 
 #![windows_subsystem = "windows"]
 
@@ -26,9 +26,10 @@ mod overlay;
 mod pin;
 mod record;
 mod recui;
+mod selftest;
 mod session;
-mod textedit;
 mod settings;
+mod textedit;
 mod traymenu;
 mod veil;
 
@@ -75,7 +76,9 @@ pub fn trace(what: &str) {
     }
     let t = T0.get_or_init(std::time::Instant::now).elapsed();
     use std::io::Write;
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(std::env::temp_dir().join("wispshot-trace.log")) {
+    if let Ok(mut f) =
+        std::fs::OpenOptions::new().create(true).append(true).open(std::env::temp_dir().join("wispshot-trace.log"))
+    {
         let _ = writeln!(f, "[{}] {:>10.2} ms  {}", std::process::id(), t.as_secs_f64() * 1000.0, what);
     }
 }
@@ -162,6 +165,13 @@ fn main() {
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     }
+    if args.first().map(|s| s.as_str()) == Some("--selftest") {
+        let dir = std::env::args()
+            .nth(2)
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::env::temp_dir().join("WispShot-selftest"));
+        std::process::exit(selftest::run(&dir));
+    }
     if args.first().map(|s| s.as_str()) == Some("--session") {
         IS_SESSION.store(true, Ordering::Relaxed);
         let veil = args.get(2).and_then(|s| s.parse::<isize>().ok()).filter(|v| *v != 0).map(|v| HWND(v as *mut _));
@@ -208,7 +218,20 @@ fn resident(args: Vec<String>) {
             ..Default::default()
         };
         RegisterClassExW(&wc);
-        let Ok(hwnd) = CreateWindowExW(WS_EX_TOOLWINDOW, w!("WispApp"), w!("Wisp"), WS_POPUP, 0, 0, 0, 0, None, None, Some(inst.into()), None) else {
+        let Ok(hwnd) = CreateWindowExW(
+            WS_EX_TOOLWINDOW,
+            w!("WispApp"),
+            w!("Wisp"),
+            WS_POPUP,
+            0,
+            0,
+            0,
+            0,
+            None,
+            None,
+            Some(inst.into()),
+            None,
+        ) else {
             return;
         };
         set_app_hwnd(hwnd);
@@ -249,7 +272,9 @@ fn resident(args: Vec<String>) {
 
 fn register_hotkeys(warn: bool) {
     let Some(app) = app_hwnd() else { return };
-    let Some((cfg, suspended, recording, held)) = with(|s| (s.cfg.clone(), s.suspended, s.recording, s.held)) else { return };
+    let Some((cfg, suspended, recording, held)) = with(|s| (s.cfg.clone(), s.suspended, s.recording, s.held)) else {
+        return;
+    };
     let mut failed = vec![];
     unsafe {
         for (id, k) in [(HK_CAPTURE, K::Capture), (HK_RECORD, K::Record), (HK_PIN, K::PinClipboard)] {
@@ -278,7 +303,15 @@ fn watch_fullscreen() {
     let Some((on, hook)) = with(|s| (s.cfg.pause_fullscreen, s.fg_hook)) else { return };
     unsafe {
         if on && hook.is_invalid() {
-            let h = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, None, Some(on_foreground), 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+            let h = SetWinEventHook(
+                EVENT_SYSTEM_FOREGROUND,
+                EVENT_SYSTEM_FOREGROUND,
+                None,
+                Some(on_foreground),
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+            );
             with(|s| s.fg_hook = h);
         } else if !on && !hook.is_invalid() {
             let _ = UnhookWinEvent(hook);
@@ -326,7 +359,9 @@ fn foreground_is_fullscreen() -> bool {
         let mut cls = [0u16; 64];
         let n = GetClassNameW(h, &mut cls) as usize;
         let cls = String::from_utf16_lossy(&cls[..n]);
-        if matches!(cls.as_str(), "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd") || cls.starts_with("Wisp") {
+        if matches!(cls.as_str(), "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd")
+            || cls.starts_with("Wisp")
+        {
             return false;
         }
         let style = GetWindowLongW(h, GWL_STYLE) as u32;
@@ -417,7 +452,15 @@ pub fn ipc_send(kind: usize, text: &str) {
         let w: Vec<u16> = text.encode_utf16().collect();
         let cds = COPYDATASTRUCT { dwData: kind, cbData: (w.len() * 2) as u32, lpData: w.as_ptr() as *mut _ };
         let mut out = 0usize;
-        let _ = SendMessageTimeoutW(res, WM_COPYDATA, WPARAM(0), LPARAM(&cds as *const _ as isize), SMTO_ABORTIFHUNG, 1000, Some(&mut out));
+        let _ = SendMessageTimeoutW(
+            res,
+            WM_COPYDATA,
+            WPARAM(0),
+            LPARAM(&cds as *const _ as isize),
+            SMTO_ABORTIFHUNG,
+            1000,
+            Some(&mut out),
+        );
     }
 }
 
@@ -467,10 +510,22 @@ fn tray_menu() {
     use traymenu::Row;
     let Some((cfg, suspended)) = with(|s| (s.cfg.clone(), s.suspended)) else { return };
     let recording = sync_recording();
-    let item = |id: usize, icon: char, text: &str, key: &str| Row::Item { id, icon, text: text.to_string(), key: key.to_string(), danger: false };
+    let item = |id: usize, icon: char, text: &str, key: &str| Row::Item {
+        id,
+        icon,
+        text: text.to_string(),
+        key: key.to_string(),
+        danger: false,
+    };
     let mut rows = vec![item(CMD_CAPTURE, '\u{E722}', t("menu.capture"), &cfg.key_label(K::Capture))];
     rows.push(if recording {
-        Row::Item { id: CMD_RECORD, icon: '\u{E71A}', text: t("menu.stop_recording").into(), key: cfg.key_label(K::Record), danger: true }
+        Row::Item {
+            id: CMD_RECORD,
+            icon: '\u{E71A}',
+            text: t("menu.stop_recording").into(),
+            key: cfg.key_label(K::Record),
+            danger: true,
+        }
     } else {
         item(CMD_RECORD, '\u{E714}', t("menu.record"), &cfg.key_label(K::Record))
     });
@@ -575,7 +630,9 @@ fn session_window(class: &str) -> Option<HWND> {
 
 fn spawn_session(kind: &str) {
     // one interactive capture at a time
-    if session_window("WispOverlay").is_some() || session_window("WispVeil").map_or(false, |v| unsafe { IsWindowVisible(v).as_bool() }) {
+    if session_window("WispOverlay").is_some()
+        || session_window("WispVeil").is_some_and(|v| unsafe { IsWindowVisible(v).as_bool() })
+    {
         return;
     }
     // the veil appears immediately; the session process takes over from it

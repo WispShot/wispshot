@@ -330,7 +330,9 @@ pub fn pressed(scope: Scope, vk: u16) -> Option<K> {
 
 /// Shortcut text for tooltips ("" when unbound).
 pub fn label(k: K) -> String {
-    ACTIVE.with(|a| a.borrow().get(k as usize).copied().flatten().and_then(|c| c.text()).map(|t| display(&t)).unwrap_or_default())
+    ACTIVE.with(|a| {
+        a.borrow().get(k as usize).copied().flatten().and_then(|c| c.text()).map(|t| display(&t)).unwrap_or_default()
+    })
 }
 
 /// The other action that already uses `c` where it would clash with `k`, if any.
@@ -339,6 +341,8 @@ pub fn clash(texts: &[String], k: K, c: Chord) -> Option<K> {
     let scope = def(k).scope;
     DEFS.iter()
         .zip(texts)
-        .find(|(d, t)| d.k != k && (d.scope == scope || d.scope == Scope::Global || scope == Scope::Global) && parse(t) == Some(c))
+        .find(|(d, t)| {
+            d.k != k && (d.scope == scope || d.scope == Scope::Global || scope == Scope::Global) && parse(t) == Some(c)
+        })
         .map(|(d, _)| d.k)
 }

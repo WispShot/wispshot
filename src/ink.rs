@@ -118,7 +118,20 @@ pub fn create(r: RECT, g: Rc<Gfx>, scale: f32, fade: bool) {
         };
         RegisterClassExW(&wc);
         let (w, h) = (r.right - r.left, r.bottom - r.top);
-        let Ok(hwnd) = CreateWindowExW(passive_style(), w!("WispRecInk"), w!(""), WS_POPUP, r.left, r.top, w, h, None, None, Some(inst.into()), None) else {
+        let Ok(hwnd) = CreateWindowExW(
+            passive_style(),
+            w!("WispRecInk"),
+            w!(""),
+            WS_POPUP,
+            r.left,
+            r.top,
+            w,
+            h,
+            None,
+            None,
+            Some(inst.into()),
+            None,
+        ) else {
             return;
         };
         let s = scale;
@@ -347,12 +360,20 @@ fn begin(x: f32, y: f32) {
         let (c, w) = (COLORS[i.colors[i.tool.idx()]], i.sizes[i.tool.idx()]);
         i.start = (x, y);
         match i.tool {
-            InkTool::Pen | InkTool::Marker => i.cur = Some(Item::Pen { pts: vec![(x, y)], c, w, marker: i.tool == InkTool::Marker }),
+            InkTool::Pen | InkTool::Marker => {
+                i.cur = Some(Item::Pen { pts: vec![(x, y)], c, w, marker: i.tool == InkTool::Marker })
+            }
             InkTool::Arrow => i.cur = Some(Item::Arrow { a: (x, y), b: (x, y), c, w }),
             InkTool::Rect => i.cur = Some(Item::Rect { r: rc(x, y, x, y), c, w }),
             InkTool::Counter => {
                 // steps stay until cleared: they tell the order of things
-                let n = i.items.iter().filter_map(|s| if let Item::Counter { n, .. } = s.item { Some(n) } else { None }).max().unwrap_or(0) + 1;
+                let n = i
+                    .items
+                    .iter()
+                    .filter_map(|s| if let Item::Counter { n, .. } = s.item { Some(n) } else { None })
+                    .max()
+                    .unwrap_or(0)
+                    + 1;
                 i.items.push(Stroke { item: Item::Counter { x, y, n, c, size: w }, done: None });
             }
         }

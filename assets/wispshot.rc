@@ -15,6 +15,9 @@ BEGIN
       VALUE "FileVersion", "0.2.0"
       VALUE "ProductVersion", "0.2.0"
       VALUE "OriginalFilename", "wispshot.exe"
+      VALUE "InternalName", "wispshot"
+      VALUE "CompanyName", "Efe Kaputlu"
+      VALUE "LegalCopyright", "Copyright (C) 2026 Efe Kaputlu. GPL-3.0-or-later."
     END
   END
   BLOCK "VarFileInfo"

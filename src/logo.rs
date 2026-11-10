@@ -91,7 +91,8 @@ pub fn raster(n: usize, rec: bool) -> Vec<u32> {
             let ink = if rec { [0xFF, 0x3B, 0x3B] } else { [0xFF, 0xFF, 0xFF] };
             let mix = |b: u32, f: u32| (b * (bg - fg) + f * fg) / bg;
             let a = bg * 255 / (ss * ss) as u32;
-            px[y * n + x] = (a << 24) | (mix(base[0], ink[0]) << 16) | (mix(base[1], ink[1]) << 8) | mix(base[2], ink[2]);
+            px[y * n + x] =
+                (a << 24) | (mix(base[0], ink[0]) << 16) | (mix(base[1], ink[1]) << 8) | mix(base[2], ink[2]);
         }
     }
     px

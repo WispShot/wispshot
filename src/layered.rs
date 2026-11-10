@@ -40,7 +40,10 @@ impl Surface {
             let bmp = CreateDIBSection(Some(dc), &bi, DIB_RGB_COLORS, &mut bits, None, 0)?;
             let old = SelectObject(dc, bmp.into());
             let props = D2D1_RENDER_TARGET_PROPERTIES {
-                pixelFormat: D2D1_PIXEL_FORMAT { format: DXGI_FORMAT_B8G8R8A8_UNORM, alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED },
+                pixelFormat: D2D1_PIXEL_FORMAT {
+                    format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                    alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
+                },
                 dpiX: 96.0,
                 dpiY: 96.0,
                 ..Default::default()
@@ -53,7 +56,12 @@ impl Surface {
 
     /// Push the finished frame to the window at screen position (x, y).
     pub fn present(&self, hwnd: HWND, x: i32, y: i32) {
-        let blend = BLENDFUNCTION { BlendOp: AC_SRC_OVER as u8, BlendFlags: 0, SourceConstantAlpha: 255, AlphaFormat: AC_SRC_ALPHA as u8 };
+        let blend = BLENDFUNCTION {
+            BlendOp: AC_SRC_OVER as u8,
+            BlendFlags: 0,
+            SourceConstantAlpha: 255,
+            AlphaFormat: AC_SRC_ALPHA as u8,
+        };
         unsafe {
             let _ = UpdateLayeredWindow(
                 hwnd,

@@ -5,8 +5,8 @@
 use crate::config::Config;
 use crate::gfx::*;
 use crate::i18n::t;
-use crate::keys::{self, K};
 use crate::ink::{self, InkTool, COLORS, TOOLS};
+use crate::keys::{self, K};
 use crate::layered::Surface;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -105,7 +105,13 @@ impl RecUi {
     pub fn show(r: RECT, cfg: &Config) -> Option<RecUi> {
         unsafe {
             let inst = GetModuleHandleW(None).unwrap_or_default();
-            for (cls, proc_) in [(w!("WispRecFrame"), Some(frame_proc as unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT)), (w!("WispRecPill"), Some(pill_proc as unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT))] {
+            for (cls, proc_) in [
+                (
+                    w!("WispRecFrame"),
+                    Some(frame_proc as unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT),
+                ),
+                (w!("WispRecPill"), Some(pill_proc as unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT)),
+            ] {
                 let wc = WNDCLASSEXW {
                     cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
                     lpfnWndProc: proc_,
@@ -141,7 +147,9 @@ impl RecUi {
             exclude(frame);
             let _ = ShowWindow(frame, SW_SHOWNOACTIVATE);
 
-            let s = crate::monitor_dpi(MonitorFromPoint(POINT { x: r.left, y: r.top }, MONITOR_DEFAULTTONEAREST)) as f32 / 96.0;
+            let s = crate::monitor_dpi(MonitorFromPoint(POINT { x: r.left, y: r.top }, MONITOR_DEFAULTTONEAREST))
+                as f32
+                / 96.0;
             let g = Rc::new(Gfx::new().unwrap_or_else(|_| std::process::abort()));
 
             // the ink goes under the pill: create it first
@@ -277,7 +285,7 @@ fn render() {
         let s = p.s;
         let (btns, bw) = layout(s);
         let (w, h) = (bw.ceil() as i32, ((BAR_H + TIP_H) * s).ceil() as i32);
-        if p.surf.as_ref().map_or(true, |f| f.w != w || f.h != h) {
+        if p.surf.as_ref().is_none_or(|f| f.w != w || f.h != h) {
             p.surf = Surface::new(&p.g, w, h).ok();
         }
         let Some(surf) = &p.surf else { return };
@@ -297,7 +305,12 @@ fn draw(p: &Pill, rt: &ID2D1RenderTarget, btns: &[(D2D_RECT_F, Btn)], bw: f32) -
         let bar = rc(0.5, 0.5, bw - 0.5, BAR_H * s - 0.5);
         let r = BAR_H * s / 2.0;
         rt.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect: bar, radiusX: r, radiusY: r }, &brush(rt, 0xF01C_1C20)?);
-        rt.DrawRoundedRectangle(&D2D1_ROUNDED_RECT { rect: bar, radiusX: r, radiusY: r }, &brush(rt, 0x30FF_FFFF)?, 1.0, None);
+        rt.DrawRoundedRectangle(
+            &D2D1_ROUNDED_RECT { rect: bar, radiusX: r, radiusY: r },
+            &brush(rt, 0x30FF_FFFF)?,
+            1.0,
+            None,
+        );
         let fg = brush(rt, 0xFFF2_F2F2)?;
         let dim = brush(rt, 0xFF9A_9AA2)?;
         let acc = brush(rt, 0xFF2B_8CFF)?;
@@ -307,15 +320,28 @@ fn draw(p: &Pill, rt: &ID2D1RenderTarget, btns: &[(D2D_RECT_F, Btn)], bw: f32) -
         // ● REC 00:12  (the dot pulses with the clock)
         let secs = (GetTickCount64() - p.start) / 1000;
         let cy = BAR_H * s / 2.0;
-        let dot = if secs % 2 == 0 { &red } else { &brush(rt, 0xFFB0_3030)? };
+        let dot = if secs.is_multiple_of(2) { &red } else { &brush(rt, 0xFFB0_3030)? };
         rt.FillEllipse(&D2D1_ELLIPSE { point: pt(18.0 * s, cy), radiusX: 5.0 * s, radiusY: 5.0 * s }, dot);
         if let Some(f) = &p.fmt_ui {
             let t: Vec<u16> = format!("REC {:02}:{:02}", secs / 60, secs % 60).encode_utf16().collect();
             let _ = f.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-            rt.DrawText(&t, f, &rc(30.0 * s, 0.0, (TIME_W + 8.0) * s, BAR_H * s), &fg, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+            rt.DrawText(
+                &t,
+                f,
+                &rc(30.0 * s, 0.0, (TIME_W + 8.0) * s, BAR_H * s),
+                &fg,
+                D2D1_DRAW_TEXT_OPTIONS_NONE,
+                DWRITE_MEASURING_MODE_NATURAL,
+            );
         }
         // divider after the clock
-        rt.DrawLine(pt((TIME_W + 2.0) * s, cy - 9.0 * s), pt((TIME_W + 2.0) * s, cy + 9.0 * s), &brush(rt, 0x40FF_FFFF)?, 1.0, None);
+        rt.DrawLine(
+            pt((TIME_W + 2.0) * s, cy - 9.0 * s),
+            pt((TIME_W + 2.0) * s, cy + 9.0 * s),
+            &brush(rt, 0x40FF_FFFF)?,
+            1.0,
+            None,
+        );
 
         let icon = |ch: &str, r: &D2D_RECT_F, b: &ID2D1SolidColorBrush| {
             if let Some(f) = &p.fmt_icon {
@@ -338,26 +364,51 @@ fn draw(p: &Pill, rt: &ID2D1RenderTarget, btns: &[(D2D_RECT_F, Btn)], bw: f32) -
             let u = 5.5 * s;
             match b {
                 Btn::Draw => {
-                    let (ch, label) = if ink::drawing() { ("\u{E73E}", t("rec.done")) } else { ("\u{E70F}", t("rec.draw")) };
+                    let (ch, label) =
+                        if ink::drawing() { ("\u{E73E}", t("rec.done")) } else { ("\u{E70F}", t("rec.draw")) };
                     icon(ch, &rc(r.left + 2.0 * s, r.top, r.left + 24.0 * s, r.bottom), &fg);
                     if let Some(f) = &p.fmt_ui {
                         let t: Vec<u16> = label.encode_utf16().collect();
-                        rt.DrawText(&t, f, &rc(r.left + 24.0 * s, r.top, r.right, r.bottom), &fg, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+                        rt.DrawText(
+                            &t,
+                            f,
+                            &rc(r.left + 24.0 * s, r.top, r.right, r.bottom),
+                            &fg,
+                            D2D1_DRAW_TEXT_OPTIONS_NONE,
+                            DWRITE_MEASURING_MODE_NATURAL,
+                        );
                     }
                 }
                 Btn::Tool(InkTool::Pen) => icon("\u{E70F}", r, &fg),
                 Btn::Tool(InkTool::Marker) => icon("\u{E7E6}", r, &fg),
                 Btn::Tool(InkTool::Rect) => icon("\u{E739}", r, &fg),
                 Btn::Tool(InkTool::Arrow) => {
-                    let it = Item::Arrow { a: (cx - u * 1.2, cy + u * 1.2), b: (cx + u * 1.2, cy - u * 1.2), c: 0xFFF2_F2F2, w: 1.6 * s };
+                    let it = Item::Arrow {
+                        a: (cx - u * 1.2, cy + u * 1.2),
+                        b: (cx + u * 1.2, cy - u * 1.2),
+                        c: 0xFFF2_F2F2,
+                        w: 1.6 * s,
+                    };
                     draw_item(&p.g, rt, &it, false)?;
                 }
                 Btn::Tool(InkTool::Counter) => {
-                    rt.DrawEllipse(&D2D1_ELLIPSE { point: pt(cx, cy), radiusX: u * 1.45, radiusY: u * 1.45 }, &fg, 1.3 * s, None);
+                    rt.DrawEllipse(
+                        &D2D1_ELLIPSE { point: pt(cx, cy), radiusX: u * 1.45, radiusY: u * 1.45 },
+                        &fg,
+                        1.3 * s,
+                        None,
+                    );
                     if let Ok(f) = p.g.text_format(11.0 * s, true) {
                         let _ = f.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
                         let _ = f.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-                        rt.DrawText(&[b'1' as u16], &f, r, &fg, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+                        rt.DrawText(
+                            &[b'1' as u16],
+                            &f,
+                            r,
+                            &fg,
+                            D2D1_DRAW_TEXT_OPTIONS_NONE,
+                            DWRITE_MEASURING_MODE_NATURAL,
+                        );
                     }
                 }
                 Btn::Color(i) => {
@@ -375,7 +426,11 @@ fn draw(p: &Pill, rt: &ID2D1RenderTarget, btns: &[(D2D_RECT_F, Btn)], bw: f32) -
                 Btn::Clear => icon("\u{E74D}", r, if ink::has_items() { &fg } else { &dim }),
                 Btn::Stop => {
                     let k = 5.5 * s;
-                    let sq = D2D1_ROUNDED_RECT { rect: rc(cx - k, cy - k, cx + k, cy + k), radiusX: 2.0 * s, radiusY: 2.0 * s };
+                    let sq = D2D1_ROUNDED_RECT {
+                        rect: rc(cx - k, cy - k, cx + k, cy + k),
+                        radiusX: 2.0 * s,
+                        radiusY: 2.0 * s,
+                    };
                     rt.FillRoundedRectangle(&sq, &red);
                 }
             }
@@ -389,10 +444,20 @@ fn draw(p: &Pill, rt: &ID2D1RenderTarget, btns: &[(D2D_RECT_F, Btn)], bw: f32) -
                 let x = ((r.left + r.right) / 2.0 - w / 2.0).clamp(0.0, (bw - w).max(0.0));
                 let y = BAR_H * s + 4.0 * s;
                 let box_ = rc(x, y, x + w, y + hh);
-                rt.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect: box_, radiusX: 5.0 * s, radiusY: 5.0 * s }, &brush(rt, 0xF01C_1C20)?);
+                rt.FillRoundedRectangle(
+                    &D2D1_ROUNDED_RECT { rect: box_, radiusX: 5.0 * s, radiusY: 5.0 * s },
+                    &brush(rt, 0xF01C_1C20)?,
+                );
                 let t: Vec<u16> = tip.encode_utf16().collect();
                 let _ = f.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
-                rt.DrawText(&t, f, &rc(x + 8.0 * s, y + 4.0 * s, x + w, y + hh), &fg, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+                rt.DrawText(
+                    &t,
+                    f,
+                    &rc(x + 8.0 * s, y + 4.0 * s, x + w, y + hh),
+                    &fg,
+                    D2D1_DRAW_TEXT_OPTIONS_NONE,
+                    DWRITE_MEASURING_MODE_NATURAL,
+                );
             }
         }
     }
@@ -468,7 +533,12 @@ unsafe extern "system" fn pill_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
             if with(|p| std::mem::replace(&mut p.hover, h) != h) == Some(true) {
                 render();
             }
-            let mut tme = TRACKMOUSEEVENT { cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32, dwFlags: TME_LEAVE, hwndTrack: hwnd, dwHoverTime: 0 };
+            let mut tme = TRACKMOUSEEVENT {
+                cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32,
+                dwFlags: TME_LEAVE,
+                hwndTrack: hwnd,
+                dwHoverTime: 0,
+            };
             let _ = TrackMouseEvent(&mut tme);
             LRESULT(0)
         }

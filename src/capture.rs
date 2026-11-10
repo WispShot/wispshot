@@ -93,7 +93,8 @@ pub fn grab_pixels(r: RECT) -> Option<Img> {
         let old = SelectObject(mem, b.into());
         let ok = BitBlt(mem, 0, 0, w, h, Some(screen), r.left, r.top, SRCCOPY).is_ok();
         let _ = GdiFlush();
-        let out = ok.then(|| Img { w, h, px: std::slice::from_raw_parts(bits as *const u32, (w * h) as usize).to_vec() });
+        let out =
+            ok.then(|| Img { w, h, px: std::slice::from_raw_parts(bits as *const u32, (w * h) as usize).to_vec() });
         SelectObject(mem, old);
         let _ = DeleteDC(mem);
         ReleaseDC(None, screen);
@@ -148,7 +149,6 @@ pub fn grab_frame(r: RECT) -> Option<GdiFrame> {
     }
 }
 
-
 struct EnumCtx {
     ox: i32,
     oy: i32,
@@ -176,16 +176,15 @@ fn children(h: HWND, frame: RECT) -> Vec<RECT> {
 /// Fill child-element rects for every window (element detection toggled on).
 pub fn fill_children(list: &mut [(isize, RECT, Vec<RECT>)], ox: i32, oy: i32) {
     for (h, frame, kids) in list.iter_mut() {
-        let screen = RECT { left: frame.left + ox, top: frame.top + oy, right: frame.right + ox, bottom: frame.bottom + oy };
+        let screen =
+            RECT { left: frame.left + ox, top: frame.top + oy, right: frame.right + ox, bottom: frame.bottom + oy };
         *kids = children(HWND(*h as *mut _), screen).into_iter().map(|r| offset(r, ox, oy)).collect();
     }
 }
 
 fn is_cloaked(h: HWND) -> bool {
     let mut cloaked: u32 = 0;
-    unsafe {
-        DwmGetWindowAttribute(h, DWMWA_CLOAKED, &mut cloaked as *mut _ as *mut _, 4).is_ok() && cloaked != 0
-    }
+    unsafe { DwmGetWindowAttribute(h, DWMWA_CLOAKED, &mut cloaked as *mut _ as *mut _, 4).is_ok() && cloaked != 0 }
 }
 
 fn frame_rect(h: HWND) -> RECT {
@@ -222,7 +221,10 @@ unsafe fn in_screenshot(h: HWND, ex: u32) -> bool {
     }
     if ex & WS_EX_LAYERED.0 != 0 {
         let (mut key, mut alpha, mut flags) = (COLORREF(0), 0u8, LAYERED_WINDOW_ATTRIBUTES_FLAGS(0));
-        if GetLayeredWindowAttributes(h, Some(&mut key), Some(&mut alpha), Some(&mut flags)).is_ok() && flags.0 & LWA_ALPHA.0 != 0 && alpha == 0 {
+        if GetLayeredWindowAttributes(h, Some(&mut key), Some(&mut alpha), Some(&mut flags)).is_ok()
+            && flags.0 & LWA_ALPHA.0 != 0
+            && alpha == 0
+        {
             return false;
         }
     }
@@ -245,7 +247,8 @@ unsafe extern "system" fn enum_top(h: HWND, lp: LPARAM) -> BOOL {
     if r.right - r.left < 8 || r.bottom - r.top < 8 {
         return TRUE;
     }
-    let kids = if ctx.deep { children(h, r).into_iter().map(|k| offset(k, ctx.ox, ctx.oy)).collect() } else { Vec::new() };
+    let kids =
+        if ctx.deep { children(h, r).into_iter().map(|k| offset(k, ctx.ox, ctx.oy)).collect() } else { Vec::new() };
     ctx.list.push((h.0 as isize, offset(r, ctx.ox, ctx.oy), kids));
     TRUE
 }
@@ -285,7 +288,6 @@ pub fn contains(r: &RECT, x: i32, y: i32) -> bool {
 /// Smallest element under the point, inside the front-most window containing it.
 pub fn detect(windows: &[(isize, RECT, Vec<RECT>)], x: i32, y: i32, deep: bool) -> Option<RECT> {
     for (_, top, kids) in windows {
-
         if contains(top, x, y) {
             let mut best = *top;
             if deep {

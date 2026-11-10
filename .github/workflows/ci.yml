@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: MinGW-w64 (UCRT) for dlltool and windres
+        id: msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: false
+          install: mingw-w64-ucrt-x86_64-gcc
+
+      - name: Rust (GNU toolchain)
+        shell: pwsh
+        run: |
+          rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal -c clippy,rustfmt
+          rustup default stable-x86_64-pc-windows-gnu
+          "${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --release -- -D warnings
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Self-test
+        shell: pwsh
+        run: |
+          $p = Start-Process target/release/wispshot.exe -ArgumentList '--selftest', "$pwd\selftest" -Wait -PassThru
+          Get-Content selftest/selftest.txt
+          if ($p.ExitCode -ne 0) { exit $p.ExitCode }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wispshot-x64
+          path: |
+            target/release/wispshot.exe
+            selftest/

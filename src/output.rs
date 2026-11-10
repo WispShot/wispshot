@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Imaging::*;
-use windows::Win32::System::Com::*;
 use windows::Win32::System::Com::StructuredStorage::{CreateStreamOnHGlobal, GetHGlobalFromStream};
+use windows::Win32::System::Com::*;
 use windows::Win32::System::DataExchange::*;
 use windows::Win32::System::Memory::*;
 use windows::Win32::UI::Shell::Common::COMDLG_FILTERSPEC;
@@ -71,7 +71,13 @@ pub fn encode(img: &Img, fmt: Fmt) -> Result<Vec<u8>> {
             frame.WritePixels(img.h as u32, stride as u32, &buf)?;
         } else {
             // Encoder wants something else; let WIC convert from a BGR bitmap.
-            let bmp = f.CreateBitmapFromMemory(img.w as u32, img.h as u32, &GUID_WICPixelFormat24bppBGR, stride as u32, &buf)?;
+            let bmp = f.CreateBitmapFromMemory(
+                img.w as u32,
+                img.h as u32,
+                &GUID_WICPixelFormat24bppBGR,
+                stride as u32,
+                &buf,
+            )?;
             frame.WriteSource(&bmp, std::ptr::null())?;
         }
         frame.Commit()?;
@@ -258,7 +264,7 @@ fn parse_dib(b: &[u8]) -> Option<Img> {
     if bpp <= 8 {
         off += 4 * if clr_used == 0 { 1usize << bpp } else { clr_used };
     }
-    let stride = (((w as usize * bpp as usize) + 31) / 32) * 4;
+    let stride = (w as usize * bpp as usize).div_ceil(32) * 4;
     if b.len() < off + stride * h as usize || !(bpp == 24 || bpp == 32) {
         return None;
     }
@@ -331,7 +337,7 @@ pub fn clean_temp() {
     if let Ok(rd) = std::fs::read_dir(temp_dir()) {
         for e in rd.flatten() {
             if let Ok(m) = e.metadata() {
-                if m.modified().ok().and_then(|t| t.elapsed().ok()).map_or(false, |d| d.as_secs() > 86400) {
+                if m.modified().ok().and_then(|t| t.elapsed().ok()).is_some_and(|d| d.as_secs() > 86400) {
                     let _ = std::fs::remove_file(e.path());
                 }
             }
@@ -373,7 +379,11 @@ pub fn save_dialog(owner: HWND, dir: &Path, name: &str) -> Option<PathBuf> {
         // Separate "last used folder" memory for images and videos (kept by Windows per
         // client GUID); `dir` is only the starting point until something was saved.
         let video = name.ends_with(".mp4");
-        let _ = dlg.SetClientGuid(if video { &GUID::from_u128(0x6f1d2c3e_8a4b_4e57_9c1a_2b7d5e0f9a31) } else { &GUID::from_u128(0x3a9e7b14_52c6_4f0d_a8e2_c4f1b6d90e72) });
+        let _ = dlg.SetClientGuid(if video {
+            &GUID::from_u128(0x6f1d2c3e_8a4b_4e57_9c1a_2b7d5e0f9a31)
+        } else {
+            &GUID::from_u128(0x3a9e7b14_52c6_4f0d_a8e2_c4f1b6d90e72)
+        });
         // the shell parser wants backslashes (a hand-edited ini may use '/')
         let dir = PathBuf::from(dir.to_string_lossy().replace('/', "\\"));
         let _ = std::fs::create_dir_all(&dir);

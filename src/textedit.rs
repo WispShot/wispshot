@@ -24,7 +24,7 @@ fn is_low(u: u16) -> bool {
 }
 
 fn is_word(u: u16) -> bool {
-    char::from_u32(u as u32).map_or(true, |c| c.is_alphanumeric() || c == '_')
+    char::from_u32(u as u32).is_none_or(|c| c.is_alphanumeric() || c == '_')
 }
 
 impl TextEdit {
@@ -252,7 +252,9 @@ impl TextEdit {
         let mut n = 0u32;
         let mut v = vec![DWRITE_HIT_TEST_METRICS::default(); 64];
         unsafe {
-            let hit = |v: &mut [DWRITE_HIT_TEST_METRICS], n: &mut u32| l.HitTestTextRange(a as u32, (b - a) as u32, self.x, self.y, Some(v), n).is_ok();
+            let hit = |v: &mut [DWRITE_HIT_TEST_METRICS], n: &mut u32| {
+                l.HitTestTextRange(a as u32, (b - a) as u32, self.x, self.y, Some(v), n).is_ok()
+            };
             // more line parts than the buffer holds: `n` now has the real count
             if !hit(&mut v, &mut n) && n as usize > v.len() {
                 v.resize(n as usize, DWRITE_HIT_TEST_METRICS::default());

@@ -12,17 +12,17 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use windows::core::*;
 use windows::Win32::Foundation::*;
-use windows::Win32::Graphics::Direct3D::*;
 use windows::Win32::Graphics::Direct2D::Common::*;
 use windows::Win32::Graphics::Direct2D::*;
+use windows::Win32::Graphics::Direct3D::*;
 use windows::Win32::Graphics::Direct3D11::*;
-use windows_numerics::Matrix3x2;
 use windows::Win32::Graphics::Dxgi::Common::*;
 use windows::Win32::Graphics::Dxgi::*;
 use windows::Win32::Media::MediaFoundation::*;
 use windows::Win32::System::Com::*;
 use windows::Win32::System::Performance::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
+use windows_numerics::Matrix3x2;
 
 pub struct Recorder {
     stop: Arc<AtomicBool>,
@@ -38,7 +38,7 @@ impl Recorder {
     }
 
     pub fn finished(&self) -> bool {
-        self.thread.as_ref().map_or(true, |t| t.is_finished())
+        self.thread.as_ref().is_none_or(|t| t.is_finished())
     }
 
     pub fn stop(mut self) -> std::result::Result<PathBuf, String> {
@@ -85,10 +85,24 @@ struct Rotator {
 impl Rotator {
     /// Transform texture (u,v) -> region (x,y). Mappings verified against GDI captures:
     /// ROTATE270: u = DH-1-y, v = x;  ROTATE90: u = y, v = DW-1-x;  ROTATE180: both flipped.
-    unsafe fn new(device: &ID3D11Device, tex_desc: &D3D11_TEXTURE2D_DESC, target: &ID3D11Texture2D, rot: DXGI_MODE_ROTATION, dw: f32, dh: f32, sx: f32, sy: f32) -> Result<Rotator> {
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn new(
+        device: &ID3D11Device,
+        tex_desc: &D3D11_TEXTURE2D_DESC,
+        target: &ID3D11Texture2D,
+        rot: DXGI_MODE_ROTATION,
+        dw: f32,
+        dh: f32,
+        sx: f32,
+        sy: f32,
+    ) -> Result<Rotator> {
         let m = match rot {
-            DXGI_MODE_ROTATION_ROTATE270 => Matrix3x2 { M11: 0.0, M12: -1.0, M21: 1.0, M22: 0.0, M31: -sx, M32: dh - sy },
-            DXGI_MODE_ROTATION_ROTATE90 => Matrix3x2 { M11: 0.0, M12: 1.0, M21: -1.0, M22: 0.0, M31: dw - sx, M32: -sy },
+            DXGI_MODE_ROTATION_ROTATE270 => {
+                Matrix3x2 { M11: 0.0, M12: -1.0, M21: 1.0, M22: 0.0, M31: -sx, M32: dh - sy }
+            }
+            DXGI_MODE_ROTATION_ROTATE90 => {
+                Matrix3x2 { M11: 0.0, M12: 1.0, M21: -1.0, M22: 0.0, M31: dw - sx, M32: -sy }
+            }
             _ => Matrix3x2 { M11: -1.0, M12: 0.0, M21: 0.0, M22: -1.0, M31: dw - sx, M32: dh - sy },
         };
         let f: ID2D1Factory1 = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, None)?;
@@ -109,8 +123,10 @@ impl Rotator {
             bitmapOptions: opt,
             colorContext: std::mem::ManuallyDrop::new(None),
         };
-        let src = dc.CreateBitmapFromDxgiSurface(&full.cast::<IDXGISurface>()?, Some(&props(D2D1_BITMAP_OPTIONS_NONE)))?;
-        let dst = dc.CreateBitmapFromDxgiSurface(&target.cast::<IDXGISurface>()?, Some(&props(D2D1_BITMAP_OPTIONS_TARGET)))?;
+        let src =
+            dc.CreateBitmapFromDxgiSurface(&full.cast::<IDXGISurface>()?, Some(&props(D2D1_BITMAP_OPTIONS_NONE)))?;
+        let dst =
+            dc.CreateBitmapFromDxgiSurface(&target.cast::<IDXGISurface>()?, Some(&props(D2D1_BITMAP_OPTIONS_TARGET)))?;
         Ok(Rotator { dc, full, src, dst, m })
     }
 
@@ -152,7 +168,13 @@ fn find_output(r: &RECT) -> Result<Output> {
     }
 }
 
-fn run(rect: RECT, fps: u32, cursor: bool, path: PathBuf, stop: Arc<AtomicBool>) -> std::result::Result<PathBuf, String> {
+fn run(
+    rect: RECT,
+    fps: u32,
+    cursor: bool,
+    path: PathBuf,
+    stop: Arc<AtomicBool>,
+) -> std::result::Result<PathBuf, String> {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         if MFStartup(MF_VERSION, MFSTARTUP_LITE).is_err() {
@@ -184,7 +206,7 @@ unsafe fn set_ratio(t: &IMFMediaType, key: &GUID, a: u32, b: u32) -> Result<()> 
     t.SetUINT64(key, ((a as u64) << 32) | b as u64)
 }
 
-fn record(rect: RECT, fps: u32, cursor: bool, path: &PathBuf, stop: &AtomicBool, gpu: bool) -> Result<()> {
+fn record(rect: RECT, fps: u32, cursor: bool, path: &std::path::Path, stop: &AtomicBool, gpu: bool) -> Result<()> {
     unsafe {
         let out = find_output(&rect)?;
         // clip to the output and make dimensions even (H.264 requirement)
@@ -277,11 +299,18 @@ fn record(rect: RECT, fps: u32, cursor: bool, path: &PathBuf, stop: &AtomicBool,
             t.ok_or_else(|| Error::from(E_FAIL))
         };
         // latest clean desktop crop
-        let latest = mk(desc(D3D11_USAGE_DEFAULT, (D3D11_BIND_RENDER_TARGET.0 | D3D11_BIND_SHADER_RESOURCE.0) as u32, 0, 0))?;
+        let latest =
+            mk(desc(D3D11_USAGE_DEFAULT, (D3D11_BIND_RENDER_TARGET.0 | D3D11_BIND_SHADER_RESOURCE.0) as u32, 0, 0))?;
         // composition surface + a small GDI-compatible patch: only the pixels around
         // the cursor ever go through GDI, the full frame stays on the GPU.
-        let compose = mk(desc(D3D11_USAGE_DEFAULT, (D3D11_BIND_RENDER_TARGET.0 | D3D11_BIND_SHADER_RESOURCE.0) as u32, 0, 0))?;
-        let mut pd = desc(D3D11_USAGE_DEFAULT, (D3D11_BIND_RENDER_TARGET.0 | D3D11_BIND_SHADER_RESOURCE.0) as u32, 0, D3D11_RESOURCE_MISC_GDI_COMPATIBLE.0 as u32);
+        let compose =
+            mk(desc(D3D11_USAGE_DEFAULT, (D3D11_BIND_RENDER_TARGET.0 | D3D11_BIND_SHADER_RESOURCE.0) as u32, 0, 0))?;
+        let mut pd = desc(
+            D3D11_USAGE_DEFAULT,
+            (D3D11_BIND_RENDER_TARGET.0 | D3D11_BIND_SHADER_RESOURCE.0) as u32,
+            0,
+            D3D11_RESOURCE_MISC_GDI_COMPATIBLE.0 as u32,
+        );
         pd.Width = PATCH;
         pd.Height = PATCH;
         let patch = mk(pd)?;
@@ -302,7 +331,9 @@ fn record(rect: RECT, fps: u32, cursor: bool, path: &PathBuf, stop: &AtomicBool,
         // Duplication's first frame is empty until something changes on screen:
         // seed the first video frame from a GDI grab of the region instead.
         let mut have = false;
-        if let Some(seed) = crate::capture::grab_pixels(RECT { left: l, top: t, right: l + w as i32, bottom: t + h as i32 }) {
+        if let Some(seed) =
+            crate::capture::grab_pixels(RECT { left: l, top: t, right: l + w as i32, bottom: t + h as i32 })
+        {
             ctx.UpdateSubresource(&latest, 0, None, seed.px.as_ptr() as *const _, w * 4, 0);
             have = true;
         }
@@ -329,8 +360,20 @@ fn record(rect: RECT, fps: u32, cursor: bool, path: &PathBuf, stop: &AtomicBool,
                                     if rotator.is_none() {
                                         let mut td = D3D11_TEXTURE2D_DESC::default();
                                         tex.GetDesc(&mut td);
-                                        let (dw, dh) = ((out.desk.right - out.desk.left) as f32, (out.desk.bottom - out.desk.top) as f32);
-                                        rotator = Some(Rotator::new(&device, &td, &latest, out.rotation, dw, dh, sx as f32, sy as f32)?);
+                                        let (dw, dh) = (
+                                            (out.desk.right - out.desk.left) as f32,
+                                            (out.desk.bottom - out.desk.top) as f32,
+                                        );
+                                        rotator = Some(Rotator::new(
+                                            &device,
+                                            &td,
+                                            &latest,
+                                            out.rotation,
+                                            dw,
+                                            dh,
+                                            sx as f32,
+                                            sy as f32,
+                                        )?);
                                     }
                                     if let Some(r) = &rotator {
                                         r.draw(&ctx, &tex);
@@ -389,7 +432,11 @@ fn record(rect: RECT, fps: u32, cursor: bool, path: &PathBuf, stop: &AtomicBool,
                     let mut p: *mut u8 = std::ptr::null_mut();
                     mb.Lock(&mut p, None, None)?;
                     for y in 0..h as usize {
-                        std::ptr::copy_nonoverlapping((mapped.pData as *const u8).add(y * mapped.RowPitch as usize), p.add(y * w as usize * 4), w as usize * 4);
+                        std::ptr::copy_nonoverlapping(
+                            (mapped.pData as *const u8).add(y * mapped.RowPitch as usize),
+                            p.add(y * w as usize * 4),
+                            w as usize * 4,
+                        );
                     }
                     mb.Unlock()?;
                     ctx.Unmap(dst, 0);
@@ -426,7 +473,15 @@ const PATCH: u32 = 128;
 
 /// Draw the mouse cursor: copy the 128x128 area under it into a small GDI-compatible
 /// texture, draw there, copy back. Cheap regardless of the recording size.
-unsafe fn draw_cursor(ctx: &ID3D11DeviceContext, frame: &ID3D11Texture2D, patch: &ID3D11Texture2D, ox: i32, oy: i32, w: u32, h: u32) {
+unsafe fn draw_cursor(
+    ctx: &ID3D11DeviceContext,
+    frame: &ID3D11Texture2D,
+    patch: &ID3D11Texture2D,
+    ox: i32,
+    oy: i32,
+    w: u32,
+    h: u32,
+) {
     let mut ci = CURSORINFO { cbSize: std::mem::size_of::<CURSORINFO>() as u32, ..Default::default() };
     if GetCursorInfo(&mut ci).is_err() || ci.flags.0 & CURSOR_SHOWING.0 == 0 {
         return;

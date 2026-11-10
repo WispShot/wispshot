@@ -280,7 +280,12 @@ unsafe fn command(hwnd: HWND, id: usize) {
             let mut r = RECT::default();
             let _ = GetWindowRect(hwnd, &mut r);
             crate::overlay::DONE.with(|d| {
-                *d.borrow_mut() = Some(crate::overlay::Done { action: act, img: Some((*ptr).img.clone()), rect: r, text: String::new() })
+                *d.borrow_mut() = Some(crate::overlay::Done {
+                    action: act,
+                    img: Some((*ptr).img.clone()),
+                    rect: r,
+                    text: String::new(),
+                })
             });
             if let Some(app) = crate::app_hwnd() {
                 let _ = PostMessageW(Some(app), crate::overlay::WM_APP_DONE, WPARAM(1), LPARAM(0));

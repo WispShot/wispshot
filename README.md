@@ -87,8 +87,22 @@ times how long it takes until the screen visibly changes. Your numbers will diff
 
 ## Getting started
 
-1. Download `wispshot.exe` from the [Releases](../../releases) page.2. Run it. An icon appears in the tray; nothing else happens until you need it.
-3. Press `F1` to take a screenshot, or `Shift+F1` to record an area.
+Get the latest version from the [Releases](../../releases/latest) page, in one of two forms:
+
+- **Installer** (`WispShot-<version>-setup-x64.exe`): installs for your user only, with no admin rights needed. It adds
+  a Start menu entry and an uninstaller, and can start WispShot with Windows.
+- **Portable** (`WispShot-<version>-portable-x64.zip`): unzip anywhere and run `wispshot.exe`. Settings stay in
+  `wispshot.ini` next to it, so the folder works from a USB stick too.
+
+Then:
+
+1. Run it. An icon appears in the tray; nothing else happens until you need it.
+2. Press `F1` to take a screenshot, or `Shift+F1` to record an area.
+
+The files aren't code-signed yet, so Windows SmartScreen may say it "protected your PC" the first time. Choose
+*More info* > *Run anyway*. Every release lists SHA-256 checksums and is built from this repository by
+[GitHub Actions](.github/workflows/release.yml), with a build provenance attestation you can check with
+`gh attestation verify <file> --repo efekaputlu/wispshot`.
 
 Right-click the tray icon for Settings, where you can change shortcuts, choose where files are saved and turn on
 *Start with Windows*.
@@ -99,7 +113,8 @@ Right-click the tray icon for Settings, where you can change shortcuts, choose w
   <img src="docs/media/settings.png" width="520" alt="The About page in Settings, showing the tray app using 1.9 MB">
 </p>
 
-**Requirements:** Windows 10 (version 2004 or newer) or Windows 11, 64-bit. Developed and tested on Windows 11.
+**Requirements:** Windows 10 (version 2004 or newer) or Windows 11, 64-bit (x64). On Windows 11 for Arm the x64 build
+runs through Windows' built-in emulation. Developed and tested on Windows 11.
 For OCR, Windows needs a text recognition language installed
 (*Settings > Time & language > Language & region*), which is usually already there for your display language.
 
@@ -235,6 +250,10 @@ winget install BrechtSanders.WinLibs.POSIX.UCRT
 A running tray app locks its exe, so build test copies elsewhere (`./build.sh --target-dir target/t`) and start a
 session directly: `target/t/release/wispshot.exe --session capture 0` (also `record` and `settings`). Set
 `WISP_TRACE=1` to write a timing log to `%TEMP%\wispshot-trace.log`.
+
+`wispshot.exe --selftest <folder>` runs every Windows API the app relies on (screen grab, Direct2D, image encoding,
+OCR, H.264) without opening a window and writes a report to that folder; CI runs it on every push.
+`tools/package.ps1` builds the portable zip and the installer (needs [Inno Setup 6](https://jrsoftware.org/isinfo.php)).
 
 To add a language, copy `lang/en.txt`, translate the values and add it to `LANGS` in `src/i18n.rs`.
 

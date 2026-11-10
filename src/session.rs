@@ -3,8 +3,8 @@
 
 use crate::config::{self, Config};
 use crate::i18n::{t, tf};
-use crate::{ocr, output, overlay, pin, record, recui};
 use crate::{ipc_send, notify, IPC_LAST_FILE, IPC_REC_OFF, IPC_REC_ON, WM_APP_REC_STOP};
+use crate::{ocr, output, overlay, pin, record, recui};
 use std::cell::RefCell;
 use windows::core::*;
 use windows::Win32::Foundation::*;
@@ -44,7 +44,20 @@ pub fn run(kind: &str, veil: Option<HWND>, extra: &[String]) {
             ..Default::default()
         };
         RegisterClassExW(&wc);
-        let Ok(hwnd) = CreateWindowExW(WS_EX_TOOLWINDOW, w!("WispSession"), w!(""), WS_POPUP, 0, 0, 0, 0, None, None, Some(inst.into()), None) else {
+        let Ok(hwnd) = CreateWindowExW(
+            WS_EX_TOOLWINDOW,
+            w!("WispSession"),
+            w!(""),
+            WS_POPUP,
+            0,
+            0,
+            0,
+            0,
+            None,
+            None,
+            Some(inst.into()),
+            None,
+        ) else {
             return;
         };
         crate::set_app_hwnd(hwnd);
@@ -115,7 +128,9 @@ fn has_windows() -> bool {
         let mut cls = [0u16; 32];
         let n = GetClassNameW(h, &mut cls) as usize;
         let c = String::from_utf16_lossy(&cls[..n]);
-        if matches!(c.as_str(), "WispOverlay" | "WispPin" | "WispOcr" | "WispRecPill") || IsWindowVisible(h).as_bool() && c != "WispSession" && c != "WispVeil" {
+        if matches!(c.as_str(), "WispOverlay" | "WispPin" | "WispOcr" | "WispRecPill")
+            || IsWindowVisible(h).as_bool() && c != "WispSession" && c != "WispVeil"
+        {
             *(lp.0 as *mut bool) = true;
             return FALSE;
         }
@@ -165,7 +180,8 @@ fn handle_done() {
         Action::Save => {
             if let Some(img) = &done.img {
                 let name = output::timestamp_name("WispShot", "png");
-                let target = if cfg.save_ask { save_dialog(app, &cfg.save_dir, &name) } else { Some(cfg.save_dir.join(&name)) };
+                let target =
+                    if cfg.save_ask { save_dialog(app, &cfg.save_dir, &name) } else { Some(cfg.save_dir.join(&name)) };
                 if let Some(p) = target {
                     if let Some(d) = p.parent() {
                         let _ = std::fs::create_dir_all(d);
@@ -240,7 +256,7 @@ fn read_handoff(extra: &[String]) -> Option<(crate::img::Img, RECT)> {
     if w <= 0 || h <= 0 || data.len() != 8 + (w as usize * h as usize * 4) {
         return None;
     }
-    let px = data[8..].chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+    let px = data[8..].as_chunks::<4>().0.iter().map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
     Some((crate::img::Img { w, h, px }, r))
 }
 
@@ -310,7 +326,10 @@ fn save_dialog(owner: HWND, dir: &std::path::Path, name: &str) -> Option<std::pa
 /// Ask where the finished recording goes. Cancel keeps it in the default video folder.
 /// Returns the final path and whether it ended up there because of a cancel.
 fn place_video(tmp: &std::path::Path, cfg: &Config) -> (std::path::PathBuf, bool) {
-    let name = tmp.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| output::timestamp_name("WispShot", "mp4"));
+    let name = tmp
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| output::timestamp_name("WispShot", "mp4"));
     let owner = crate::app_hwnd().unwrap_or_default();
     let (dst, kept) = match save_dialog(owner, &cfg.video_dir, &name) {
         Some(p) => (p, false),
@@ -323,7 +342,7 @@ fn place_video(tmp: &std::path::Path, cfg: &Config) -> (std::path::PathBuf, bool
 }
 
 pub fn rec_finished() -> bool {
-    with(|s| s.rec.as_ref().map_or(false, |r| r.0.finished())).unwrap_or(false)
+    with(|s| s.rec.as_ref().is_some_and(|r| r.0.finished())).unwrap_or(false)
 }
 
 unsafe extern "system" fn proc_(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {

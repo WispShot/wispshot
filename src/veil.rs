@@ -85,13 +85,21 @@ fn flush() {
 
 unsafe extern "system" fn proc_(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     match msg {
-        WM_MOUSEMOVE | WM_LBUTTONDOWN | WM_LBUTTONUP | WM_LBUTTONDBLCLK | WM_RBUTTONDOWN | WM_RBUTTONUP | WM_MOUSEWHEEL | WM_KEYDOWN | WM_KEYUP | WM_CHAR | WM_SYSKEYDOWN => {
+        WM_MOUSEMOVE | WM_LBUTTONDOWN | WM_LBUTTONUP | WM_LBUTTONDBLCLK | WM_RBUTTONDOWN | WM_RBUTTONUP
+        | WM_MOUSEWHEEL | WM_KEYDOWN | WM_KEYUP | WM_CHAR | WM_SYSKEYDOWN => {
             // A drag that starts on the veil stays with the veil until the button is
             // released (explicit capture), so no event is lost in the cross-process handoff.
             if matches!(msg, WM_LBUTTONDOWN | WM_RBUTTONDOWN) {
                 SetCapture(hwnd);
             }
-            let wp = if matches!(msg, WM_MOUSEMOVE | WM_LBUTTONDOWN | WM_LBUTTONUP | WM_LBUTTONDBLCLK | WM_RBUTTONDOWN | WM_RBUTTONUP) { WPARAM(wp.0 | FORWARDED) } else { wp };
+            let wp = if matches!(
+                msg,
+                WM_MOUSEMOVE | WM_LBUTTONDOWN | WM_LBUTTONUP | WM_LBUTTONDBLCLK | WM_RBUTTONDOWN | WM_RBUTTONUP
+            ) {
+                WPARAM(wp.0 | FORWARDED)
+            } else {
+                wp
+            };
             // keep order: everything goes through the queue
             PENDING.with(|p| p.borrow_mut().push((msg, wp, lp)));
             flush();

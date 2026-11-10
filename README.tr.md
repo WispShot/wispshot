@@ -89,8 +89,22 @@ pek değişmez.
 
 ## Başlarken
 
-1. `wispshot.exe`'yi [Releases](../../releases) sayfasından indirin.2. Çalıştırın. Tepside bir simge belirir; ihtiyacınız olana kadar başka bir şey olmaz.
-3. Ekran görüntüsü için `F1`'e, bir bölgeyi kaydetmek için `Shift+F1`'e basın.
+Son sürümü [Releases](../../releases/latest) sayfasından iki biçimden biriyle indirin:
+
+- **Kurulum** (`WispShot-<sürüm>-setup-x64.exe`): yalnızca sizin kullanıcınız için kurar, yönetici izni istemez.
+  Başlat menüsüne ekler, kaldırıcısı vardır ve isterseniz WispShot'ı Windows ile başlatır.
+- **Taşınabilir** (`WispShot-<sürüm>-portable-x64.zip`): istediğiniz yere açıp `wispshot.exe`'yi çalıştırın. Ayarlar
+  yanındaki `wispshot.ini` dosyasında durur; klasör bir USB bellekten de çalışır.
+
+Sonra:
+
+1. Çalıştırın. Tepside bir simge belirir; ihtiyacınız olana kadar başka bir şey olmaz.
+2. Ekran görüntüsü için `F1`'e, bir bölgeyi kaydetmek için `Shift+F1`'e basın.
+
+Dosyalar henüz kod imzalı değil; Windows SmartScreen ilk seferde "bilgisayarınızı korudu" diyebilir. *Ek bilgi* >
+*Yine de çalıştır* deyin. Her sürümde SHA-256 sağlamaları bulunur ve sürümler bu depodan
+[GitHub Actions](.github/workflows/release.yml) ile derlenir; derleme kaynağı belgesini
+`gh attestation verify <dosya> --repo efekaputlu/wispshot` ile doğrulayabilirsiniz.
 
 Tepsi simgesine sağ tıklayıp Ayarlar'ı açın: kısayolları değiştirebilir, dosyaların nereye kaydedileceğini seçebilir
 ve *Windows ile başlat*'ı açabilirsiniz.
@@ -101,7 +115,8 @@ ve *Windows ile başlat*'ı açabilirsiniz.
   <img src="docs/media/settings.png" width="520" alt="Ayarlar'daki Hakkında sayfası: tepsi uygulaması 1,9 MB kullanıyor">
 </p>
 
-**Gereksinimler:** Windows 10 (2004 veya sonrası) ya da Windows 11, 64 bit. Windows 11'de geliştirilip test edildi.
+**Gereksinimler:** Windows 10 (2004 veya sonrası) ya da Windows 11, 64 bit (x64). Arm işlemcili Windows 11'de x64
+sürümü Windows'un yerleşik emülasyonuyla çalışır. Windows 11'de geliştirilip test edildi.
 OCR için Windows'ta bir metin tanıma dilinin kurulu olması gerekir (*Ayarlar > Saat ve dil > Dil ve bölge*);
 genellikle ekran diliniz için zaten kuruludur.
 
@@ -238,6 +253,10 @@ winget install BrechtSanders.WinLibs.POSIX.UCRT
 Çalışan tepsi uygulaması kendi exe'sini kilitler; denemeleri başka bir klasöre derleyin
 (`./build.sh --target-dir target/t`) ve oturumu doğrudan başlatın: `target/t/release/wispshot.exe --session capture 0`
 (`record` ve `settings` da olur). `WISP_TRACE=1` ile zamanlama günlüğü `%TEMP%\wispshot-trace.log`'a yazılır.
+
+`wispshot.exe --selftest <klasör>` uygulamanın dayandığı bütün Windows API'lerini (ekran okuma, Direct2D, resim
+kodlama, OCR, H.264) pencere açmadan dener ve o klasöre bir rapor yazar; CI her gönderimde bunu çalıştırır.
+`tools/package.ps1` taşınabilir zip'i ve kurulumu üretir ([Inno Setup 6](https://jrsoftware.org/isinfo.php) gerekir).
 
 Yeni bir dil eklemek için `lang/en.txt`'yi kopyalayın, değerleri çevirin ve `src/i18n.rs` içindeki `LANGS`'e ekleyin.
 

@@ -71,7 +71,12 @@ const PAGES: [(&str, char); 6] = [
     ("page.about", '\u{E946}'),
 ];
 const FPS: [u32; 4] = [15, 24, 30, 60];
-const GROUPS: [(Scope, &str); 4] = [(Scope::Global, "keys.group_global"), (Scope::Editor, "keys.group_editor"), (Scope::Ink, "keys.group_draw"), (Scope::Pin, "keys.group_pin")];
+const GROUPS: [(Scope, &str); 4] = [
+    (Scope::Global, "keys.group_global"),
+    (Scope::Editor, "keys.group_editor"),
+    (Scope::Ink, "keys.group_draw"),
+    (Scope::Pin, "keys.group_pin"),
+];
 /// Text reserve of a folder card (its subtitle is a path, trimmed from the middle).
 const FOLDER_RESERVE: f32 = 210.0;
 
@@ -200,7 +205,15 @@ fn fonts(g: &Gfx) -> Result<Fonts> {
     let mk = |fam: &str, size: f32, bold: bool| -> Result<IDWriteTextFormat> {
         let w = output::wide(fam);
         unsafe {
-            let f = g.dw.CreateTextFormat(PCWSTR(w.as_ptr()), None, if bold { DWRITE_FONT_WEIGHT_SEMI_BOLD } else { DWRITE_FONT_WEIGHT_NORMAL }, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, w!(""))?;
+            let f = g.dw.CreateTextFormat(
+                PCWSTR(w.as_ptr()),
+                None,
+                if bold { DWRITE_FONT_WEIGHT_SEMI_BOLD } else { DWRITE_FONT_WEIGHT_NORMAL },
+                DWRITE_FONT_STYLE_NORMAL,
+                DWRITE_FONT_STRETCH_NORMAL,
+                size,
+                w!(""),
+            )?;
             f.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)?;
             f.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)?;
             Ok(f)
@@ -210,11 +223,23 @@ fn fonts(g: &Gfx) -> Result<Fonts> {
     unsafe {
         // long paths keep their end: C:\Users\…\Pictures\WispShot
         let sign = g.dw.CreateEllipsisTrimmingSign(&path)?;
-        let t = DWRITE_TRIMMING { granularity: DWRITE_TRIMMING_GRANULARITY_CHARACTER, delimiter: '\\' as u32, delimiterCount: 2 };
+        let t = DWRITE_TRIMMING {
+            granularity: DWRITE_TRIMMING_GRANULARITY_CHARACTER,
+            delimiter: '\\' as u32,
+            delimiterCount: 2,
+        };
         path.SetTrimming(&t, &sign)?;
     }
     let icon = g.icon_format(16.0)?;
-    Ok(Fonts { title: mk(disp, 28.0, true)?, body: mk(text, 14.0, false)?, body_b: mk(text, 14.0, true)?, sub: mk(text, 12.0, false)?, path, icon, hero: mk(disp, 20.0, true)? })
+    Ok(Fonts {
+        title: mk(disp, 28.0, true)?,
+        body: mk(text, 14.0, false)?,
+        body_b: mk(text, 14.0, true)?,
+        sub: mk(text, 12.0, false)?,
+        path,
+        icon,
+        hero: mk(disp, 20.0, true)?,
+    })
 }
 
 pub fn open() -> bool {
@@ -248,7 +273,20 @@ pub fn open() -> bool {
         let x = (wa.left + (wa.right - wa.left - w) / 2).max(wa.left);
         let y = (wa.top + (wa.bottom - wa.top - h) / 2).max(wa.top);
         let title = output::wide(t("settings.window_title"));
-        let Ok(hwnd) = CreateWindowExW(WINDOW_EX_STYLE(0), w!("WispSettings"), PCWSTR(title.as_ptr()), style, x, y, w, h, None, None, Some(inst.into()), None) else {
+        let Ok(hwnd) = CreateWindowExW(
+            WINDOW_EX_STYLE(0),
+            w!("WispSettings"),
+            PCWSTR(title.as_ptr()),
+            style,
+            x,
+            y,
+            w,
+            h,
+            None,
+            None,
+            Some(inst.into()),
+            None,
+        ) else {
             return false;
         };
         let light = crate::traymenu::light_theme(false);
@@ -302,7 +340,12 @@ fn tray_memory() -> Option<f64> {
         GetWindowThreadProcessId(h, Some(&mut pid));
         let p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
         let mut c = PROCESS_MEMORY_COUNTERS_EX::default();
-        let ok = GetProcessMemoryInfo(p, &mut c as *mut _ as *mut _, std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32).is_ok();
+        let ok = GetProcessMemoryInfo(
+            p,
+            &mut c as *mut _ as *mut _,
+            std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32,
+        )
+        .is_ok();
         let _ = CloseHandle(p);
         ok.then(|| c.PrivateUsage as f64 / (1024.0 * 1024.0))
     }
@@ -328,7 +371,11 @@ fn rrect(rt: &ID2D1RenderTarget, r: D2D_RECT_F, rad: f32, fill: u32, stroke: u32
             }
         }
         if stroke >> 24 != 0 {
-            let r2 = D2D1_ROUNDED_RECT { rect: rc(r.left + 0.5, r.top + 0.5, r.right - 0.5, r.bottom - 0.5), radiusX: rad, radiusY: rad };
+            let r2 = D2D1_ROUNDED_RECT {
+                rect: rc(r.left + 0.5, r.top + 0.5, r.right - 0.5, r.bottom - 0.5),
+                radiusX: rad,
+                radiusY: rad,
+            };
             if let Ok(b) = brush(rt, stroke) {
                 rt.DrawRoundedRectangle(&r2, &b, 1.0, None);
             }
@@ -382,7 +429,11 @@ impl St {
             if self.rt.is_none() {
                 let mut r = RECT::default();
                 let _ = GetClientRect(self.hwnd, &mut r);
-                let props = D2D1_RENDER_TARGET_PROPERTIES { dpiX: self.dpi as f32, dpiY: self.dpi as f32, ..Default::default() };
+                let props = D2D1_RENDER_TARGET_PROPERTIES {
+                    dpiX: self.dpi as f32,
+                    dpiY: self.dpi as f32,
+                    ..Default::default()
+                };
                 let hp = D2D1_HWND_RENDER_TARGET_PROPERTIES {
                     hwnd: self.hwnd,
                     pixelSize: D2D_SIZE_U { width: r.right as u32, height: r.bottom as u32 },
@@ -408,7 +459,12 @@ impl St {
         let Some(f) = &self.f else { return 0.0 };
         let p = &self.p;
         unsafe {
-            let c = |v: u32| D2D1_COLOR_F { r: ((v >> 16) & 0xFF) as f32 / 255.0, g: ((v >> 8) & 0xFF) as f32 / 255.0, b: (v & 0xFF) as f32 / 255.0, a: 1.0 };
+            let c = |v: u32| D2D1_COLOR_F {
+                r: ((v >> 16) & 0xFF) as f32 / 255.0,
+                g: ((v >> 8) & 0xFF) as f32 / 255.0,
+                b: (v & 0xFF) as f32 / 255.0,
+                a: 1.0,
+            };
             rt.Clear(Some(&c(p.bg)));
             if let Ok(b) = brush(rt, p.nav) {
                 rt.FillRectangle(&rc(0.0, 0.0, NAV_W, H), &b);
@@ -422,7 +478,13 @@ impl St {
         for (i, (name, icon)) in PAGES.iter().enumerate() {
             let r = rc(8.0, y, NAV_W - 8.0, y + 38.0);
             let a = Act::Nav(i);
-            let bg = if self.page == i { p.selected } else if self.hover == Some(a) { p.hover } else { 0 };
+            let bg = if self.page == i {
+                p.selected
+            } else if self.hover == Some(a) {
+                p.hover
+            } else {
+                0
+            };
             rrect(rt, r, 5.0, bg, 0);
             if self.page == i {
                 rrect(rt, rc(8.0, y + 11.0, 11.0, y + 27.0), 1.5, p.accent, 0);
@@ -447,7 +509,13 @@ impl St {
         let mut body: Hits = vec![];
         let top = VIEW_TOP + 8.0 - self.scroll;
         let mut y = top;
-        let card = |st: &St, y: &mut f32, title: &str, sub: &str, reserve: f32, hits: &mut Hits, ctl: &mut dyn FnMut(&St, D2D_RECT_F, &mut Hits)| {
+        let card = |st: &St,
+                    y: &mut f32,
+                    title: &str,
+                    sub: &str,
+                    reserve: f32,
+                    hits: &mut Hits,
+                    ctl: &mut dyn FnMut(&St, D2D_RECT_F, &mut Hits)| {
             let h = if sub.is_empty() { 56.0 } else { 70.0 };
             let r = rc(x0, *y, x1, *y + h);
             rrect(rt, r, 6.0, p.card, p.card_border);
@@ -463,7 +531,15 @@ impl St {
         };
         match self.page {
             0 => {
-                card(self, &mut y, t("keys.pause_fullscreen"), t("keys.pause_fullscreen_sub"), 140.0, &mut body, &mut |st, r, h| st.toggle(rt, r, Tg::PauseFs, h));
+                card(
+                    self,
+                    &mut y,
+                    t("keys.pause_fullscreen"),
+                    t("keys.pause_fullscreen_sub"),
+                    140.0,
+                    &mut body,
+                    &mut |st, r, h| st.toggle(rt, r, Tg::PauseFs, h),
+                );
                 txt(rt, t("keys.how_to"), &f.sub, rc(x0 + 4.0, y + 2.0, x1, y + 26.0), p.sub);
                 y += 30.0;
                 for (scope, title) in GROUPS {
@@ -490,33 +566,78 @@ impl St {
                 y += 26.0;
             }
             1 => {
-                card(self, &mut y, t("shots.save"), t("shots.save_sub"), 300.0, &mut body, &mut |st, r, h| st.seg(rt, r, Sg::SaveMode, &[t("common.ask"), t("common.to_folder")], h));
+                card(self, &mut y, t("shots.save"), t("shots.save_sub"), 300.0, &mut body, &mut |st, r, h| {
+                    st.seg(rt, r, Sg::SaveMode, &[t("common.ask"), t("common.to_folder")], h)
+                });
                 let d = self.cfg.save_dir.display().to_string();
-                card(self, &mut y, t("common.folder"), &d, FOLDER_RESERVE, &mut body, &mut |st, r, h| st.folder(rt, r, false, h));
-                card(self, &mut y, t("shots.notify"), t("shots.notify_sub"), 140.0, &mut body, &mut |st, r, h| st.toggle(rt, r, Tg::SaveNotify, h));
+                card(self, &mut y, t("common.folder"), &d, FOLDER_RESERVE, &mut body, &mut |st, r, h| {
+                    st.folder(rt, r, false, h)
+                });
+                card(self, &mut y, t("shots.notify"), t("shots.notify_sub"), 140.0, &mut body, &mut |st, r, h| {
+                    st.toggle(rt, r, Tg::SaveNotify, h)
+                });
             }
             2 => {
-                card(self, &mut y, t("video.save"), t("video.save_sub"), 300.0, &mut body, &mut |st, r, h| st.seg(rt, r, Sg::VideoMode, &[t("common.ask"), t("common.to_folder")], h));
+                card(self, &mut y, t("video.save"), t("video.save_sub"), 300.0, &mut body, &mut |st, r, h| {
+                    st.seg(rt, r, Sg::VideoMode, &[t("common.ask"), t("common.to_folder")], h)
+                });
                 let d = self.cfg.video_dir.display().to_string();
-                card(self, &mut y, t("common.folder"), &d, FOLDER_RESERVE, &mut body, &mut |st, r, h| st.folder(rt, r, true, h));
-                card(self, &mut y, t("video.notify"), "", 140.0, &mut body, &mut |st, r, h| st.toggle(rt, r, Tg::VideoNotify, h));
-                card(self, &mut y, t("video.fps"), t("video.fps_sub"), 230.0, &mut body, &mut |st, r, h| st.seg(rt, r, Sg::Fps, &["15", "24", "30", "60"], h));
-                card(self, &mut y, t("video.cursor"), "", 140.0, &mut body, &mut |st, r, h| st.toggle(rt, r, Tg::Cursor, h));
-                card(self, &mut y, t("video.fade"), t("video.fade_sub"), 140.0, &mut body, &mut |st, r, h| st.toggle(rt, r, Tg::InkFade, h));
+                card(self, &mut y, t("common.folder"), &d, FOLDER_RESERVE, &mut body, &mut |st, r, h| {
+                    st.folder(rt, r, true, h)
+                });
+                card(self, &mut y, t("video.notify"), "", 140.0, &mut body, &mut |st, r, h| {
+                    st.toggle(rt, r, Tg::VideoNotify, h)
+                });
+                card(self, &mut y, t("video.fps"), t("video.fps_sub"), 230.0, &mut body, &mut |st, r, h| {
+                    st.seg(rt, r, Sg::Fps, &["15", "24", "30", "60"], h)
+                });
+                card(self, &mut y, t("video.cursor"), "", 140.0, &mut body, &mut |st, r, h| {
+                    st.toggle(rt, r, Tg::Cursor, h)
+                });
+                card(self, &mut y, t("video.fade"), t("video.fade_sub"), 140.0, &mut body, &mut |st, r, h| {
+                    st.toggle(rt, r, Tg::InkFade, h)
+                });
             }
             3 => {
-                card(self, &mut y, t("capture.magnifier"), t("capture.magnifier_sub"), 140.0, &mut body, &mut |st, r, h| st.toggle(rt, r, Tg::Magnifier, h));
+                card(
+                    self,
+                    &mut y,
+                    t("capture.magnifier"),
+                    t("capture.magnifier_sub"),
+                    140.0,
+                    &mut body,
+                    &mut |st, r, h| st.toggle(rt, r, Tg::Magnifier, h),
+                );
                 let sub = tf("capture.detect_sub", &[&keys::display(self.cfg.key(K::Detect))]);
-                card(self, &mut y, t("capture.detect"), &sub, 140.0, &mut body, &mut |st, r, h| st.toggle(rt, r, Tg::Detect, h));
+                card(self, &mut y, t("capture.detect"), &sub, 140.0, &mut body, &mut |st, r, h| {
+                    st.toggle(rt, r, Tg::Detect, h)
+                });
             }
             4 => {
                 let mut langs: Vec<&str> = vec![t("general.system")];
                 langs.extend(i18n::LANGS.iter().map(|l| l.1));
-                card(self, &mut y, t("general.language"), "", 330.0, &mut body, &mut |st, r, h| st.seg(rt, r, Sg::Language, &langs, h));
-                card(self, &mut y, t("general.theme"), "", 330.0, &mut body, &mut |st, r, h| st.seg(rt, r, Sg::Theme, &[t("general.system"), t("general.light"), t("general.dark")], h));
-                card(self, &mut y, t("general.autostart"), t("general.autostart_sub"), 140.0, &mut body, &mut |st, r, h| st.toggle(rt, r, Tg::Autostart, h));
+                card(self, &mut y, t("general.language"), "", 330.0, &mut body, &mut |st, r, h| {
+                    st.seg(rt, r, Sg::Language, &langs, h)
+                });
+                card(self, &mut y, t("general.theme"), "", 330.0, &mut body, &mut |st, r, h| {
+                    st.seg(rt, r, Sg::Theme, &[t("general.system"), t("general.light"), t("general.dark")], h)
+                });
+                card(
+                    self,
+                    &mut y,
+                    t("general.autostart"),
+                    t("general.autostart_sub"),
+                    140.0,
+                    &mut body,
+                    &mut |st, r, h| st.toggle(rt, r, Tg::Autostart, h),
+                );
                 card(self, &mut y, t("general.ini"), t("general.ini_sub"), 130.0, &mut body, &mut |st, r, h| {
-                    let b = rc(r.right - 18.0 - 90.0, (r.top + r.bottom) / 2.0 - 16.0, r.right - 18.0, (r.top + r.bottom) / 2.0 + 16.0);
+                    let b = rc(
+                        r.right - 18.0 - 90.0,
+                        (r.top + r.bottom) / 2.0 - 16.0,
+                        r.right - 18.0,
+                        (r.top + r.bottom) / 2.0 + 16.0,
+                    );
                     st.button(rt, b, t("common.open"), Act::OpenIni, h);
                 });
             }
@@ -524,7 +645,13 @@ impl St {
                 rrect(rt, rc(x0, y, x1, y + 112.0), 6.0, p.card, p.card_border);
                 self.logo(rt, x0 + 24.0, y + 26.0, 60.0);
                 txt(rt, "WispShot", &f.hero, rc(x0 + 104.0, y + 22.0, x1, y + 50.0), p.text);
-                txt(rt, &tf("about.version", &[env!("CARGO_PKG_VERSION")]), &f.sub, rc(x0 + 104.0, y + 50.0, x1, y + 68.0), p.sub);
+                txt(
+                    rt,
+                    &tf("about.version", &[env!("CARGO_PKG_VERSION")]),
+                    &f.sub,
+                    rc(x0 + 104.0, y + 50.0, x1, y + 68.0),
+                    p.sub,
+                );
                 txt(rt, t("about.tagline"), &f.body, rc(x0 + 104.0, y + 70.0, x1 - 16.0, y + 92.0), p.text);
                 y += 116.0;
                 let mem = match self.tray_mb {
@@ -557,7 +684,13 @@ impl St {
             rrect(rt, r, 6.0, if self.light { 0xFF2B_2B2B } else { 0xFFF3_F3F3 }, 0);
             let ic = if *bad { '\u{E7BA}' } else { '\u{E73E}' };
             let fg = if self.light { 0xFFFF_FFFF } else { 0xFF1B_1B1B };
-            txt(rt, &ic.to_string(), &f.icon, rc(r.left + 10.0, r.top, r.left + 30.0, r.bottom), if *bad { p.danger } else { fg });
+            txt(
+                rt,
+                &ic.to_string(),
+                &f.icon,
+                rc(r.left + 10.0, r.top, r.left + 30.0, r.bottom),
+                if *bad { p.danger } else { fg },
+            );
             txt(rt, msg, &f.body, rc(r.left + 34.0, r.top, r.right - 8.0, r.bottom), fg);
         }
         content_h
@@ -568,10 +701,20 @@ impl St {
         use crate::logo::*;
         let k = s / (BOX.1 - BOX.0);
         let m = |p: (f32, f32)| pt(x + (p.0 - BOX.0) * k, y + (p.1 - BOX.0) * k);
-        let col = |c: u32| D2D1_COLOR_F { r: ((c >> 16) & 0xFF) as f32 / 255.0, g: ((c >> 8) & 0xFF) as f32 / 255.0, b: (c & 0xFF) as f32 / 255.0, a: 1.0 };
+        let col = |c: u32| D2D1_COLOR_F {
+            r: ((c >> 16) & 0xFF) as f32 / 255.0,
+            g: ((c >> 8) & 0xFF) as f32 / 255.0,
+            b: (c & 0xFF) as f32 / 255.0,
+            a: 1.0,
+        };
         unsafe {
-            let stops = [D2D1_GRADIENT_STOP { position: 0.0, color: col(C0) }, D2D1_GRADIENT_STOP { position: 1.0, color: col(C1) }];
-            let Ok(sc) = rt.CreateGradientStopCollection(&stops, D2D1_GAMMA_2_2, D2D1_EXTEND_MODE_CLAMP) else { return };
+            let stops = [
+                D2D1_GRADIENT_STOP { position: 0.0, color: col(C0) },
+                D2D1_GRADIENT_STOP { position: 1.0, color: col(C1) },
+            ];
+            let Ok(sc) = rt.CreateGradientStopCollection(&stops, D2D1_GAMMA_2_2, D2D1_EXTEND_MODE_CLAMP) else {
+                return;
+            };
             let props = D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES { startPoint: m((6.0, 58.0)), endPoint: m((58.0, 6.0)) };
             let Ok(grad) = rt.CreateLinearGradientBrush(&props, None, &sc) else { return };
             let rr = D2D1_ROUNDED_RECT { rect: rc(x, y, x + s, y + s), radiusX: BOX.2 * k, radiusY: BOX.2 * k };
@@ -589,7 +732,10 @@ impl St {
                     }
                 }
             }
-            rt.FillEllipse(&D2D1_ELLIPSE { point: m((SPARK.0, SPARK.1)), radiusX: SPARK.2 * k, radiusY: SPARK.2 * k }, &white);
+            rt.FillEllipse(
+                &D2D1_ELLIPSE { point: m((SPARK.0, SPARK.1)), radiusX: SPARK.2 * k, radiusY: SPARK.2 * k },
+                &white,
+            );
         }
     }
 
@@ -607,7 +753,13 @@ impl St {
             rrect(rt, tr, 10.0, if hov { p.hover } else { 0 }, p.off_border);
             circle(rt, tr.left + 10.0, cy, if hov { 6.0 } else { 5.0 }, p.off_border);
         }
-        txt(rt, if on { t("common.on") } else { t("common.off") }, &f.body, rc(tr.left - 70.0, card.top, tr.left - 12.0, card.bottom), p.text);
+        txt(
+            rt,
+            if on { t("common.on") } else { t("common.off") },
+            &f.body,
+            rc(tr.left - 70.0, card.top, tr.left - 12.0, card.bottom),
+            p.text,
+        );
         // the whole card toggles: a bigger target than the switch
         hits.push((card, Act::Tog(tg)));
     }
@@ -631,7 +783,13 @@ impl St {
                 rrect(rt, inner, 4.0, p.hover, 0);
             }
             let tw = self.g.measure(o, &f.body).0;
-            txt(rt, o, &f.body, rc(r.left + (w - tw) / 2.0, r.top, r.right, r.bottom), if sel == Some(i) { p.on_accent } else { p.text });
+            txt(
+                rt,
+                o,
+                &f.body,
+                rc(r.left + (w - tw) / 2.0, r.top, r.right, r.bottom),
+                if sel == Some(i) { p.on_accent } else { p.text },
+            );
             hits.push((r, a));
             x += w;
         }
@@ -640,7 +798,13 @@ impl St {
     fn button(&self, rt: &ID2D1RenderTarget, r: D2D_RECT_F, label: &str, a: Act, hits: &mut Hits) {
         let Some(f) = &self.f else { return };
         let p = &self.p;
-        let bg = if self.press == Some(a) { p.hover } else if self.hover == Some(a) { p.btn_hover } else { p.btn };
+        let bg = if self.press == Some(a) {
+            p.hover
+        } else if self.hover == Some(a) {
+            p.btn_hover
+        } else {
+            p.btn
+        };
         rrect(rt, r, 5.0, bg, p.btn_border);
         let tw = self.g.measure(label, &f.body).0;
         txt(rt, label, &f.body, rc((r.left + r.right - tw) / 2.0, r.top, r.right, r.bottom), p.text);
@@ -677,7 +841,13 @@ impl St {
         if rec {
             rrect(rt, rc(r.left + 1.0, r.top + 1.0, r.right - 1.0, r.bottom - 1.0), 4.0, 0, p.accent);
         }
-        let col = if rec { p.accent } else if shown.is_empty() { p.sub } else { p.text };
+        let col = if rec {
+            p.accent
+        } else if shown.is_empty() {
+            p.sub
+        } else {
+            p.text
+        };
         txt(rt, &label, &f.body_b, rc((r.left + r.right - tw) / 2.0, r.top, r.right, r.bottom), col);
         hits.push((r, a));
     }
@@ -737,7 +907,10 @@ impl St {
                     Tg::Autostart => {
                         crate::set_autostart(v);
                         self.autostart = crate::autostart_enabled();
-                        self.show_toast(if self.autostart { t("general.autostart_on") } else { t("general.autostart_off") }, false);
+                        self.show_toast(
+                            if self.autostart { t("general.autostart_on") } else { t("general.autostart_off") },
+                            false,
+                        );
                         return;
                     }
                 }
@@ -768,7 +941,9 @@ impl St {
                 self.commit(t("settings.saved"));
             }
             Act::Browse(_) => {} // handled in wndproc: the dialog must not run inside a borrow
-            Act::OpenDir(video) => crate::open_path(if video { &self.cfg.video_dir } else { &self.cfg.save_dir }, false),
+            Act::OpenDir(video) => {
+                crate::open_path(if video { &self.cfg.video_dir } else { &self.cfg.save_dir }, false)
+            }
             Act::OpenIni => open_ini(),
             Act::ResetKeys => {
                 self.cfg.keys = DEFS.iter().map(|d| d.default.to_string()).collect();
@@ -793,7 +968,20 @@ impl St {
     fn record_key(&mut self, vk: u16) -> bool {
         let Some(k) = self.recording else { return false };
         let key = VIRTUAL_KEY(vk);
-        if matches!(key, VK_CONTROL | VK_SHIFT | VK_MENU | VK_LWIN | VK_RWIN | VK_LCONTROL | VK_RCONTROL | VK_LSHIFT | VK_RSHIFT | VK_LMENU | VK_RMENU) {
+        if matches!(
+            key,
+            VK_CONTROL
+                | VK_SHIFT
+                | VK_MENU
+                | VK_LWIN
+                | VK_RWIN
+                | VK_LCONTROL
+                | VK_RCONTROL
+                | VK_LSHIFT
+                | VK_RSHIFT
+                | VK_LMENU
+                | VK_RMENU
+        ) {
             return true; // wait for the real key
         }
         let c = Chord::now(vk);
@@ -838,7 +1026,8 @@ fn label_key(k: K) -> &'static str {
     use std::sync::OnceLock;
     static NAMES: OnceLock<Vec<&'static str>> = OnceLock::new();
     // the table is static: these few strings are built once and kept
-    NAMES.get_or_init(|| DEFS.iter().map(|d| &*Box::leak(format!("key.{}", d.ini).into_boxed_str())).collect())[k as usize]
+    NAMES.get_or_init(|| DEFS.iter().map(|d| &*Box::leak(format!("key.{}", d.ini).into_boxed_str())).collect())
+        [k as usize]
 }
 
 /// Folder picker starting at `cur`.
@@ -916,7 +1105,12 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             if with(|s| std::mem::replace(&mut s.hover, h) != h) == Some(true) {
                 redraw(hwnd);
             }
-            let mut tme = TRACKMOUSEEVENT { cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32, dwFlags: TME_LEAVE, hwndTrack: hwnd, dwHoverTime: 0 };
+            let mut tme = TRACKMOUSEEVENT {
+                cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32,
+                dwFlags: TME_LEAVE,
+                hwndTrack: hwnd,
+                dwHoverTime: 0,
+            };
             let _ = TrackMouseEvent(&mut tme);
             LRESULT(0)
         }
@@ -959,7 +1153,8 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             match h {
                 Some(Act::Browse(video)) if pressed == h => {
                     // the folder dialog runs its own message loop: no borrow held across it
-                    let cur = with(|s| if video { s.cfg.video_dir.clone() } else { s.cfg.save_dir.clone() }).unwrap_or_default();
+                    let cur = with(|s| if video { s.cfg.video_dir.clone() } else { s.cfg.save_dir.clone() })
+                        .unwrap_or_default();
                     if let Some(p) = browse(hwnd, &cur) {
                         with(|s| {
                             if video {
@@ -1042,7 +1237,15 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
                 s.rt = None;
             });
             let r = &*(lp.0 as *const RECT);
-            let _ = SetWindowPos(hwnd, None, r.left, r.top, r.right - r.left, r.bottom - r.top, SWP_NOZORDER | SWP_NOACTIVATE);
+            let _ = SetWindowPos(
+                hwnd,
+                None,
+                r.left,
+                r.top,
+                r.right - r.left,
+                r.bottom - r.top,
+                SWP_NOZORDER | SWP_NOACTIVATE,
+            );
             redraw(hwnd);
             LRESULT(0)
         }

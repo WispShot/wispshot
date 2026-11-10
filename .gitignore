@@ -2,3 +2,4 @@ target/
 *.raw
 *.log
 wispshot.ini
+dist/

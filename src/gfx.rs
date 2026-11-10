@@ -133,7 +133,10 @@ pub fn bitmap(rt: &ID2D1RenderTarget, img: &Img) -> Result<ID2D1Bitmap> {
             Some(img.px.as_ptr() as *const _),
             (img.w * 4) as u32,
             &D2D1_BITMAP_PROPERTIES {
-                pixelFormat: D2D1_PIXEL_FORMAT { format: DXGI_FORMAT_B8G8R8A8_UNORM, alphaMode: D2D1_ALPHA_MODE_IGNORE },
+                pixelFormat: D2D1_PIXEL_FORMAT {
+                    format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                    alphaMode: D2D1_ALPHA_MODE_IGNORE,
+                },
                 dpiX: 96.0,
                 dpiY: 96.0,
             },
@@ -170,16 +173,54 @@ impl Tool {
 }
 
 pub enum Item {
-    Rect { r: D2D_RECT_F, c: u32, w: f32 },
-    Ellipse { r: D2D_RECT_F, c: u32, w: f32 },
-    Arrow { a: (f32, f32), b: (f32, f32), c: u32, w: f32 },
-    Line { a: (f32, f32), b: (f32, f32), c: u32, w: f32 },
-    Pen { pts: Vec<(f32, f32)>, c: u32, w: f32, marker: bool },
-    Text { x: f32, y: f32, s: String, c: u32, size: f32 },
-    Counter { x: f32, y: f32, n: u32, c: u32, size: f32 },
+    Rect {
+        r: D2D_RECT_F,
+        c: u32,
+        w: f32,
+    },
+    Ellipse {
+        r: D2D_RECT_F,
+        c: u32,
+        w: f32,
+    },
+    Arrow {
+        a: (f32, f32),
+        b: (f32, f32),
+        c: u32,
+        w: f32,
+    },
+    Line {
+        a: (f32, f32),
+        b: (f32, f32),
+        c: u32,
+        w: f32,
+    },
+    Pen {
+        pts: Vec<(f32, f32)>,
+        c: u32,
+        w: f32,
+        marker: bool,
+    },
+    Text {
+        x: f32,
+        y: f32,
+        s: String,
+        c: u32,
+        size: f32,
+    },
+    Counter {
+        x: f32,
+        y: f32,
+        n: u32,
+        c: u32,
+        size: f32,
+    },
     /// Blur / mosaic: pixels of a pre-computed effect image shown through a shape.
     /// The effect covers the whole selection, so a moved shape re-samples its new spot.
-    Fx { fx: Rc<Effect>, shape: FxShape },
+    Fx {
+        fx: Rc<Effect>,
+        shape: FxShape,
+    },
 }
 
 pub enum FxShape {
@@ -241,7 +282,8 @@ impl Item {
     /// Is (x,y) on the visible part of the item (within `tol`)?
     pub fn hit(&self, x: f32, y: f32, tol: f32) -> bool {
         let p = (x, y);
-        let inside = |r: &D2D_RECT_F, m: f32| x >= r.left - m && x <= r.right + m && y >= r.top - m && y <= r.bottom + m;
+        let inside =
+            |r: &D2D_RECT_F, m: f32| x >= r.left - m && x <= r.right + m && y >= r.top - m && y <= r.bottom + m;
         match self {
             Item::Rect { r, w, .. } => {
                 let m = w / 2.0 + tol;
@@ -326,10 +368,7 @@ pub fn draw_item(g: &Gfx, rt: &ID2D1RenderTarget, it: &Item, cache_bitmaps: bool
                 let geo = g.d2d.CreatePathGeometry()?;
                 let sink = geo.Open()?;
                 sink.BeginFigure(pt(bb.0, bb.1), D2D1_FIGURE_BEGIN_FILLED);
-                sink.AddLines(&[
-                    pt(base.0 - uy * hw, base.1 + ux * hw),
-                    pt(base.0 + uy * hw, base.1 - ux * hw),
-                ]);
+                sink.AddLines(&[pt(base.0 - uy * hw, base.1 + ux * hw), pt(base.0 + uy * hw, base.1 - ux * hw)]);
                 sink.EndFigure(D2D1_FIGURE_END_CLOSED);
                 sink.Close()?;
                 rt.FillGeometry(&geo, &b, None);
@@ -355,7 +394,14 @@ pub fn draw_item(g: &Gfx, rt: &ID2D1RenderTarget, it: &Item, cache_bitmaps: bool
                 let b = brush(rt, *c)?;
                 let f = g.text_format(*size, true)?;
                 let w: Vec<u16> = s.encode_utf16().collect();
-                rt.DrawText(&w, &f, &rc(*x, *y, x + 100000.0, y + 100000.0), &b, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+                rt.DrawText(
+                    &w,
+                    &f,
+                    &rc(*x, *y, x + 100000.0, y + 100000.0),
+                    &b,
+                    D2D1_DRAW_TEXT_OPTIONS_NONE,
+                    DWRITE_MEASURING_MODE_NATURAL,
+                );
             }
             Item::Counter { x, y, n, c, size } => {
                 let r = size;
@@ -368,7 +414,14 @@ pub fn draw_item(g: &Gfx, rt: &ID2D1RenderTarget, it: &Item, cache_bitmaps: bool
                 f.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER)?;
                 f.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)?;
                 let s: Vec<u16> = n.to_string().encode_utf16().collect();
-                rt.DrawText(&s, &f, &rc(x - r, y - r, x + r, y + r), &wb, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+                rt.DrawText(
+                    &s,
+                    &f,
+                    &rc(x - r, y - r, x + r, y + r),
+                    &wb,
+                    D2D1_DRAW_TEXT_OPTIONS_NONE,
+                    DWRITE_MEASURING_MODE_NATURAL,
+                );
             }
             Item::Fx { fx, shape } => {
                 let bmp = if cache_bitmaps {
@@ -421,10 +474,14 @@ pub fn export(g: &Gfx, base: &Img, sel: (i32, i32, i32, i32), items: &[Item]) ->
 
     unsafe {
         let wic: IWICImagingFactory = CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER)?;
-        let wb = wic.CreateBitmap(crop.w as u32, crop.h as u32, &GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnLoad)?;
+        let wb =
+            wic.CreateBitmap(crop.w as u32, crop.h as u32, &GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnLoad)?;
         let props = D2D1_RENDER_TARGET_PROPERTIES {
             r#type: D2D1_RENDER_TARGET_TYPE_SOFTWARE,
-            pixelFormat: D2D1_PIXEL_FORMAT { format: DXGI_FORMAT_B8G8R8A8_UNORM, alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED },
+            pixelFormat: D2D1_PIXEL_FORMAT {
+                format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
+            },
             dpiX: 96.0,
             dpiY: 96.0,
             ..Default::default()

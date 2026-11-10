@@ -49,7 +49,19 @@ struct Theme {
 fn reg_dword(path: PCWSTR, name: PCWSTR) -> Option<u32> {
     let mut v = 0u32;
     let mut n = 4u32;
-    unsafe { RegGetValueW(HKEY_CURRENT_USER, path, name, RRF_RT_REG_DWORD, None, Some(&mut v as *mut _ as *mut _), Some(&mut n)).is_ok().then_some(v) }
+    unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            path,
+            name,
+            RRF_RT_REG_DWORD,
+            None,
+            Some(&mut v as *mut _ as *mut _),
+            Some(&mut n),
+        )
+        .is_ok()
+        .then_some(v)
+    }
 }
 
 /// Windows "accent color" as 0xRRGGBB (registry stores 0xAABBGGRR).
@@ -74,15 +86,37 @@ pub fn light_theme(system: bool) -> bool {
         crate::config::Theme::System => {}
     }
     let name = if system { w!("SystemUsesLightTheme") } else { w!("AppsUseLightTheme") };
-    reg_dword(w!("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"), name).map_or(false, |v| v != 0)
+    reg_dword(w!("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"), name).is_some_and(|v| v != 0)
 }
 
 fn theme() -> Theme {
     let a = accent();
     if light_theme(true) {
-        Theme { bg: 0xF9F9F9, hover: 0xEAEAEA, text: 0x1B1B1B, sub: 0x666666, accent: a, danger: 0xC42B1C, warn: 0x8F6B00, sep: 0xE0E0E0, off_track: 0xF3F3F3, off_knob: 0x5C5C5C }
+        Theme {
+            bg: 0xF9F9F9,
+            hover: 0xEAEAEA,
+            text: 0x1B1B1B,
+            sub: 0x666666,
+            accent: a,
+            danger: 0xC42B1C,
+            warn: 0x8F6B00,
+            sep: 0xE0E0E0,
+            off_track: 0xF3F3F3,
+            off_knob: 0x5C5C5C,
+        }
     } else {
-        Theme { bg: 0x2C2C2C, hover: 0x3D3D3D, text: 0xFFFFFF, sub: 0xABABAB, accent: a, danger: 0xFF99A4, warn: 0xFCE100, sep: 0x404040, off_track: 0x353535, off_knob: 0xCFCFCF }
+        Theme {
+            bg: 0x2C2C2C,
+            hover: 0x3D3D3D,
+            text: 0xFFFFFF,
+            sub: 0xABABAB,
+            accent: a,
+            danger: 0xFF99A4,
+            warn: 0xFCE100,
+            sep: 0x404040,
+            off_track: 0x353535,
+            off_knob: 0xCFCFCF,
+        }
     }
 }
 
@@ -101,6 +135,7 @@ impl Canvas {
     }
 
     /// Anti-aliased rounded rectangle (pixel coordinates, `a` = 0..1 opacity).
+    #[allow(clippy::too_many_arguments)]
     fn rrect(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, r: f32, c: u32, a: f32) {
         let (cx, cy) = ((x0 + x1) / 2.0, (y0 + y1) / 2.0);
         let (hw, hh) = ((x1 - x0) / 2.0, (y1 - y0) / 2.0);
@@ -197,7 +232,24 @@ fn font_exists(name: &str) -> bool {
 
 fn make_font(face: &str, px: i32, weight: i32) -> HFONT {
     let f = wide(face);
-    unsafe { CreateFontW(-px, 0, 0, 0, weight, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, 0, PCWSTR(f.as_ptr())) }
+    unsafe {
+        CreateFontW(
+            -px,
+            0,
+            0,
+            0,
+            weight,
+            0,
+            0,
+            0,
+            DEFAULT_CHARSET,
+            OUT_DEFAULT_PRECIS,
+            CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY,
+            0,
+            PCWSTR(f.as_ptr()),
+        )
+    }
 }
 
 pub fn is_open() -> bool {
@@ -251,7 +303,20 @@ pub fn show(spec: Spec, x: i32, y: i32) {
         let text = if font_exists("Segoe UI Variable Text") { "Segoe UI Variable Text" } else { "Segoe UI" };
         let icons = if font_exists("Segoe Fluent Icons") { "Segoe Fluent Icons" } else { "Segoe MDL2 Assets" };
         let px = |v: f32| (v * s).round() as i32;
-        let Ok(hwnd) = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, w!("WispTrayMenu"), w!("WispShot"), WS_POPUP, left, top, w, h, None, None, Some(inst.into()), None) else {
+        let Ok(hwnd) = CreateWindowExW(
+            WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+            w!("WispTrayMenu"),
+            w!("WispShot"),
+            WS_POPUP,
+            left,
+            top,
+            w,
+            h,
+            None,
+            None,
+            Some(inst.into()),
+            None,
+        ) else {
             return;
         };
         let pref = DWMWCP_ROUND;
@@ -337,7 +402,12 @@ fn paint(m: &Menu, dc: HDC) {
                     let knob_r = if *on { 7.0 } else { 6.0 } * s;
                     if *on {
                         cv.rrect(tx, ty, tx + tw, ty + th, th / 2.0, t.accent, 1.0);
-                        cv.circle(tx + tw - th / 2.0, ty + th / 2.0, knob_r, if light_theme(true) { 0xFFFFFF } else { 0x000000 });
+                        cv.circle(
+                            tx + tw - th / 2.0,
+                            ty + th / 2.0,
+                            knob_r,
+                            if light_theme(true) { 0xFFFFFF } else { 0x000000 },
+                        );
                     } else {
                         cv.rrect(tx, ty, tx + tw, ty + th, th / 2.0, t.off_knob, 1.0);
                         cv.rrect(tx + s, ty + s, tx + tw - s, ty + th - s, th / 2.0 - s, t.off_track, 1.0);
@@ -377,21 +447,47 @@ fn paint(m: &Menu, dc: HDC) {
         // header: app name + version, optional status
         let top = px(PAD);
         draw("WispShot", m.font_b, t.text, RECT { left: px(46.0), top, right: m.w, bottom: top + px(HEAD) }, DT_LEFT);
-        draw(&format!("v{}", env!("CARGO_PKG_VERSION")), m.font_s, t.sub, RECT { left: px(16.0), top, right: m.w - px(16.0), bottom: top + px(HEAD) }, DT_RIGHT);
+        draw(
+            &format!("v{}", env!("CARGO_PKG_VERSION")),
+            m.font_s,
+            t.sub,
+            RECT { left: px(16.0), top, right: m.w - px(16.0), bottom: top + px(HEAD) },
+            DT_RIGHT,
+        );
         if let Some(st) = &m.spec.status {
             let y = top + px(HEAD) - px(8.0);
-            draw("\u{E7BA}", m.font_i, t.warn, RECT { left: px(16.0), top: y, right: px(40.0), bottom: y + px(STATUS) }, DT_LEFT);
-            draw(st, m.font_s, t.sub, RECT { left: px(42.0), top: y, right: m.w - px(8.0), bottom: y + px(STATUS) }, DT_LEFT | DT_END_ELLIPSIS);
+            draw(
+                "\u{E7BA}",
+                m.font_i,
+                t.warn,
+                RECT { left: px(16.0), top: y, right: px(40.0), bottom: y + px(STATUS) },
+                DT_LEFT,
+            );
+            draw(
+                st,
+                m.font_s,
+                t.sub,
+                RECT { left: px(42.0), top: y, right: m.w - px(8.0), bottom: y + px(STATUS) },
+                DT_LEFT | DT_END_ELLIPSIS,
+            );
         }
         for (i, r) in m.spec.rows.iter().enumerate() {
             let (ya, yb) = m.ys[i];
             let (icon, text, key, color) = match r {
-                Row::Item { icon, text, key, danger, .. } => (*icon, text.as_str(), key.as_str(), if *danger { t.danger } else { t.text }),
+                Row::Item { icon, text, key, danger, .. } => {
+                    (*icon, text.as_str(), key.as_str(), if *danger { t.danger } else { t.text })
+                }
                 Row::Toggle { icon, text, .. } => (*icon, text.as_str(), "", t.text),
                 Row::Sep => continue,
             };
             let ic = if matches!(r, Row::Item { danger: true, .. }) { t.danger } else { t.text };
-            draw(&icon.to_string(), m.font_i, ic, RECT { left: px(16.0), top: ya, right: px(40.0), bottom: yb }, DT_LEFT);
+            draw(
+                &icon.to_string(),
+                m.font_i,
+                ic,
+                RECT { left: px(16.0), top: ya, right: px(40.0), bottom: yb },
+                DT_LEFT,
+            );
             // leave room only for what is on the right (shortcut or switch)
             let key_w = if key.is_empty() {
                 0
@@ -406,7 +502,13 @@ fn paint(m: &Menu, dc: HDC) {
             let right = if matches!(r, Row::Toggle { .. }) { m.w - px(64.0) } else { m.w - px(16.0) - key_w };
             draw(text, m.font, color, RECT { left: px(46.0), top: ya, right, bottom: yb }, DT_LEFT | DT_END_ELLIPSIS);
             if !key.is_empty() {
-                draw(key, m.font_s, t.sub, RECT { left: px(150.0), top: ya, right: m.w - px(16.0), bottom: yb }, DT_RIGHT);
+                draw(
+                    key,
+                    m.font_s,
+                    t.sub,
+                    RECT { left: px(150.0), top: ya, right: m.w - px(16.0), bottom: yb },
+                    DT_RIGHT,
+                );
             }
         }
         let _ = BitBlt(dc, 0, 0, m.w, m.h, Some(mem), 0, 0, SRCCOPY);
@@ -417,7 +519,8 @@ fn paint(m: &Menu, dc: HDC) {
 }
 
 fn row_at(y: i32) -> Option<usize> {
-    with(|m| m.ys.iter().position(|(a, b)| y >= *a && y < *b).filter(|&i| !matches!(m.spec.rows[i], Row::Sep))).flatten()
+    with(|m| m.ys.iter().position(|(a, b)| y >= *a && y < *b).filter(|&i| !matches!(m.spec.rows[i], Row::Sep)))
+        .flatten()
 }
 
 fn activate(i: usize) {
@@ -481,7 +584,12 @@ unsafe extern "system" fn proc_(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) ->
             if with(|m| std::mem::replace(&mut m.hover, r) != r) == Some(true) {
                 let _ = InvalidateRect(Some(hwnd), None, false);
             }
-            let mut tme = TRACKMOUSEEVENT { cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32, dwFlags: TME_LEAVE, hwndTrack: hwnd, dwHoverTime: 0 };
+            let mut tme = TRACKMOUSEEVENT {
+                cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32,
+                dwFlags: TME_LEAVE,
+                hwndTrack: hwnd,
+                dwHoverTime: 0,
+            };
             let _ = TrackMouseEvent(&mut tme);
             LRESULT(0)
         }

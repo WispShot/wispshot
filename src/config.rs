@@ -37,6 +37,8 @@ pub struct Config {
     /// Screenshot file format (the save dialog preselects it).
     pub image_format: crate::output::Fmt,
     pub jpeg_quality: u32,
+    /// Share frame around copied / saved screenshots.
+    pub frame: crate::frame::Style,
     pub video_dir: PathBuf,
     pub video_ask: bool,
     pub video_notify: bool,
@@ -106,12 +108,13 @@ fn default_ini() -> String {
     }
     s += &format!("; {}\npause_in_fullscreen = true\n", t("ini.pause_fullscreen"));
     s += &format!(
-        "\n[output]\n; {}\nsave_dir =\n; {}\nsave_mode = ask\n; {}\nnotify = true\n; {}\nformat = png\n; {}\njpeg_quality = 90\n",
+        "\n[output]\n; {}\nsave_dir =\n; {}\nsave_mode = ask\n; {}\nnotify = true\n; {}\nformat = png\n; {}\njpeg_quality = 90\n; {}\nframe = off\n",
         t("ini.save_dir"),
         t("ini.save_mode"),
         t("ini.notify"),
         t("ini.format"),
-        t("ini.jpeg_quality")
+        t("ini.jpeg_quality"),
+        t("ini.frame")
     );
     s += &format!("\n[record]\n; {}\nvideo_dir =\n; {}\nsave_mode = folder\nnotify = true\nfps = 30\ncursor = true\n; {}\nink_fade = true\n; {}\nformat = mp4\n; {}\ngif_fps = 15\ngif_width = 800\n", t("ini.video_dir"), t("ini.video_mode"), t("ini.ink_fade"), t("ini.video_format"), t("ini.gif"));
     s += &format!("\n[capture]\nmagnifier = true\n; {}\ndetect_elements = false\n; {}\ndelay = 3\n", t("ini.detect"), t("ini.delay"));
@@ -186,6 +189,7 @@ pub fn save(cfg: &Config) -> std::io::Result<()> {
         ("output", "notify", tf(cfg.save_notify)),
         ("output", "format", cfg.image_format.ext().to_string()),
         ("output", "jpeg_quality", cfg.jpeg_quality.to_string()),
+        ("output", "frame", cfg.frame.ini().to_string()),
         ("record", "video_dir", dir(&cfg.video_dir, default_video_dir())),
         ("record", "save_mode", mode(cfg.video_ask)),
         ("record", "notify", tf(cfg.video_notify)),
@@ -275,6 +279,12 @@ fn set_values(text: &str, vals: &[(&str, &str, String)], remove: &[&str]) -> Str
 }
 
 static THEME: AtomicU8 = AtomicU8::new(0);
+static FRAME_ON: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether the share frame is on in the settings (the editor starts from this).
+pub fn frame_on() -> bool {
+    FRAME_ON.load(Ordering::Relaxed)
+}
 
 /// Theme chosen in the settings (System / Light / Dark), for every window of this process.
 pub fn theme() -> Theme {
@@ -364,6 +374,7 @@ pub fn load() -> Config {
         save_notify: b("output.notify", true),
         image_format: crate::output::Fmt::parse(&get("output.format", "png")).unwrap_or(crate::output::Fmt::Png),
         jpeg_quality: get("output.jpeg_quality", "90").parse::<u32>().unwrap_or(90).clamp(1, 100),
+        frame: crate::frame::Style::parse(&get("output.frame", "off")),
         video_dir: dir("record.video_dir", &FOLDERID_Videos),
         video_ask: ask("record.save_mode", None, false),
         video_notify: b("record.notify", true),
@@ -383,6 +394,7 @@ pub fn load() -> Config {
     };
     crate::i18n::set(&cfg.language);
     crate::output::set_jpeg_quality(cfg.jpeg_quality);
+    FRAME_ON.store(cfg.frame != crate::frame::Style::Off, Ordering::Relaxed);
     THEME.store(cfg.theme as u8, Ordering::Relaxed);
     keys::activate(&cfg.keys);
     cfg

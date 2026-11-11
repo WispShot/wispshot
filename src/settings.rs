@@ -50,6 +50,7 @@ enum Sg {
     Delay,
     ImageFmt,
     VideoFmt,
+    Frame,
     Language,
     Theme,
 }
@@ -422,6 +423,7 @@ impl St {
             Sg::Delay => DELAYS.iter().position(|d| *d == self.cfg.capture_delay),
             Sg::ImageFmt => output::Fmt::ALL.iter().position(|f| *f == self.cfg.image_format),
             Sg::VideoFmt => Some(self.cfg.gif as usize),
+            Sg::Frame => crate::frame::Style::ALL.iter().position(|f| *f == self.cfg.frame),
             Sg::Language => {
                 if self.cfg.language.eq_ignore_ascii_case("system") {
                     Some(0)
@@ -588,6 +590,11 @@ impl St {
                 let fmts: Vec<&str> = output::Fmt::ALL.iter().map(|f| f.label()).collect();
                 card(self, &mut y, t("shots.format"), t("shots.format_sub"), 300.0, &mut body, &mut |st, r, h| {
                     st.seg(rt, r, Sg::ImageFmt, &fmts, h)
+                });
+                let sub = t("shots.frame_sub");
+                let opts = [t("frame.s_off"), t("frame.s_color"), t("frame.s_light"), t("frame.s_dark")];
+                card(self, &mut y, t("shots.frame"), sub, 330.0, &mut body, &mut |st, r, h| {
+                    st.seg(rt, r, Sg::Frame, &opts, h)
                 });
             }
             2 => {
@@ -953,6 +960,7 @@ impl St {
                     Sg::Delay => self.cfg.capture_delay = DELAYS[i],
                     Sg::ImageFmt => self.cfg.image_format = output::Fmt::ALL[i],
                     Sg::VideoFmt => self.cfg.gif = i == 1,
+                    Sg::Frame => self.cfg.frame = crate::frame::Style::ALL[i],
                     Sg::Language => {
                         self.cfg.language = if i == 0 { "system".into() } else { i18n::LANGS[i - 1].0.into() };
                         i18n::set(&self.cfg.language);

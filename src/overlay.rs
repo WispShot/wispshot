@@ -46,6 +46,10 @@ pub struct Done {
     /// Selection in virtual-screen coordinates.
     pub rect: RECT,
     pub text: String,
+    /// Put the share frame around the result.
+    pub frame: bool,
+    /// Comes from a pin (already in the history, if that is on).
+    pub from_pin: bool,
 }
 
 thread_local! {
@@ -225,6 +229,7 @@ struct Ov {
     /// A short message above the toolbar (sensitive-info search).
     note: Option<String>,
     redacting: bool,
+    frame: bool,
 }
 
 const WM_APP_INIT: u32 = WM_APP + 11;
@@ -335,6 +340,7 @@ pub fn open(mode: Mode, magnifier: bool, deep: bool, veil: Option<HWND>) -> bool
             size_hint: false,
             note: None,
             redacting: false,
+            frame: crate::config::frame_on(),
         });
         let raw = Box::into_raw(ov);
         let hwnd = CreateWindowExW(
@@ -1210,7 +1216,7 @@ impl Ov {
 
     // ---------------------------------------------------------------- input
     fn finish(&mut self, action: Action) {
-        let mut done = Done { action, img: None, rect: RECT::default(), text: String::new() };
+        let mut done = Done { action, img: None, rect: RECT::default(), text: String::new(), frame: self.frame, from_pin: false };
         if action == Action::CopyColor {
             let p = self.shot.img.get(self.mouse.0, self.mouse.1);
             done.text = format!("#{:06X}", p & 0xFF_FFFF);
@@ -2076,6 +2082,10 @@ impl Ov {
             K::PinIt => self.finish(Action::Pin),
             K::Ocr => self.finish(Action::Ocr),
             K::Redact => self.redact(),
+            K::Frame => {
+                self.frame = !self.frame;
+                self.set_note(if self.frame { t("frame.on") } else { t("frame.off") }, 1800);
+            }
             K::RecordArea => self.finish(Action::Record),
             K::ScrollCapture => self.finish(Action::Scroll),
             K::Undo => self.undo(),

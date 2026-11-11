@@ -65,6 +65,7 @@ pek değişmez.
 - Tekerlekle kalınlık, imleçte anlık önizleme
 - `Ctrl` basılı tutarak herhangi bir çizimi ya da birkaçını birden taşıyın veya silin; metne çift tıklayıp yeniden düzenleyin
 - Sınırsız geri al ve yinele
+- **Paylaşım çerçevesi**: renkli, açık ya da koyu arka planda boşluk, yuvarlak köşe ve gölge (`F`)
 - **Hassas bilgileri gizleme** (`Ctrl+B`): e-posta, telefon, IBAN, kart numarası, T.C. kimlik no ve API
   anahtarlarını Windows OCR ile bulup tek adımda bulanıklaştırır (sağlama hanesi denetimi sıradan sayılara dokunmaz)
 - **Kaydırmalı çekim**: seçili alanda uzun bir sayfayı kaydırın (ya da *Otomatik*e bırakın), tek bir uzun görüntü alın

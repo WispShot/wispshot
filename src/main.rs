@@ -15,6 +15,7 @@ mod capture;
 mod config;
 mod countdown;
 mod gfx;
+mod frame;
 mod gif;
 mod history;
 mod i18n;

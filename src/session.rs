@@ -192,14 +192,18 @@ fn handle_done() {
     let Some(app) = crate::app_hwnd() else { return };
     let Some(cfg) = with(|s| s.cfg.clone()) else { return };
     use overlay::Action;
-    if matches!(done.action, Action::Copy | Action::CopyFile | Action::Save | Action::Pin | Action::Ocr) {
+    if !done.from_pin && matches!(done.action, Action::Copy | Action::CopyFile | Action::Save | Action::Pin | Action::Ocr) {
         if let Some(img) = &done.img {
             keep(img, &cfg);
         }
     }
+    // the share frame goes on what leaves the editor (not on pins, OCR or the history)
+    let style = if cfg.frame == crate::frame::Style::Off { crate::frame::Style::Color } else { cfg.frame };
+    let framed = |img: &crate::img::Img| if done.frame { crate::frame::apply(img, style) } else { img.clone() };
     match done.action {
         Action::Copy => {
-            if let Some(img) = &done.img {
+            if let Some(img) = done.img.as_ref().map(framed) {
+                let img = &img;
                 if !output::copy_image(app, img) {
                     notify("WispShot", t("err.clipboard_busy"));
                 }
@@ -209,7 +213,8 @@ fn handle_done() {
             output::copy_text(app, &done.text);
         }
         Action::CopyFile => {
-            if let Some(img) = &done.img {
+            if let Some(img) = done.img.as_ref().map(framed) {
+                let img = &img;
                 let p = output::temp_dir().join(output::timestamp_name("WispShot", "png"));
                 match output::save(img, &p) {
                     Ok(()) => {
@@ -220,7 +225,8 @@ fn handle_done() {
             }
         }
         Action::Save => {
-            if let Some(img) = &done.img {
+            if let Some(img) = done.img.as_ref().map(framed) {
+                let img = &img;
                 let name = output::timestamp_name("WispShot", cfg.image_format.ext());
                 let target =
                     if cfg.save_ask { save_dialog(app, &cfg.save_dir, &name) } else { Some(cfg.save_dir.join(&name)) };

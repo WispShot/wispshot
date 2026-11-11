@@ -293,6 +293,8 @@ unsafe fn command(hwnd: HWND, id: usize) {
                     img: Some((*ptr).img.clone()),
                     rect: r,
                     text: String::new(),
+                    frame: crate::config::frame_on(),
+                    from_pin: true,
                 })
             });
             if let Some(app) = crate::app_hwnd() {

@@ -64,6 +64,7 @@ times how long it takes until the screen visibly changes. Your numbers will diff
 - Scroll to change the width, with a live preview at the cursor
 - Hold `Ctrl` to move or delete any drawing, or several at once; double-click text to edit it again
 - Unlimited undo and redo
+- **Share frame**: a margin, rounded corners and a shadow on a color, light or dark background (`F`)
 - **Hide sensitive info** (`Ctrl+B`): finds e-mail addresses, phone numbers, IBANs, card numbers, ID numbers
   and API keys with Windows OCR and blurs them in one step (checksums keep ordinary numbers untouched)
 - **Scrolling capture**: scroll a long page inside the selected area (or let *Auto* do it) and get one tall image

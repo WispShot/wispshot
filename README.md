@@ -71,6 +71,8 @@ times how long it takes until the screen visibly changes. Your numbers will diff
 - Save as PNG, JPG, BMP or TIFF, either asking every time or straight into a folder
 - Pin an image on top of other windows; zoom it, make it see-through, copy it again later
 - **OCR** with the text recognition built into Windows: nothing to download
+- **Searchable history** (off by default): the last captures stay on your PC and you can find one by the text
+  in it, for example every screenshot that says "invoice"
 
 **Record**
 - Record any area to MP4 (H.264) with the GPU's own encoder (Intel Quick Sync, NVIDIA NVENC, AMD AMF),
@@ -291,7 +293,7 @@ To add a language, copy `lang/en.txt`, translate the values and add it to `LANGS
 
 ## Known limitations
 
-- No capture history yet. Scrolling capture follows downward scrolling only.
+- Scrolling capture follows downward scrolling only.
 - You can move, delete and edit text drawings, but not yet change the color or width of other drawings.
 - Recordings have no audio and cover a single monitor (an area is clipped to its monitor).
 - While recording, the GPU driver can take around 180 MB and part of a CPU core on busy content. It all goes away

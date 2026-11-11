@@ -16,6 +16,7 @@ mod config;
 mod countdown;
 mod gfx;
 mod gif;
+mod history;
 mod i18n;
 mod img;
 mod ink;
@@ -130,6 +131,7 @@ const CMD_EXIT: usize = 109;
 const CMD_MENU: usize = 111;
 /// Capture after `capture_delay` seconds; again cancels the countdown.
 const CMD_DELAY: usize = 112;
+const CMD_HISTORY: usize = 113;
 
 // session -> resident messages (WM_COPYDATA dwData)
 pub const IPC_NOTIFY: usize = 1;
@@ -602,6 +604,7 @@ fn tray_menu() {
     rows.extend([
         item(CMD_PIN, '\u{E718}', t("menu.pin_clipboard"), &cfg.key_label(K::PinClipboard)),
         item(CMD_CLOSEPINS, '\u{E77A}', t("menu.close_pins"), ""),
+        item(CMD_HISTORY, '\u{E81C}', t("menu.history"), ""),
         Row::Sep,
         item(CMD_SHOTS, '\u{E91B}', t("menu.shots_folder"), ""),
         item(CMD_VIDEOS, '\u{E8B7}', t("menu.videos_folder"), ""),
@@ -791,6 +794,18 @@ fn command(id: usize) {
         CMD_CLOSEPINS => close_all_pins(),
         CMD_SHOTS => open_path(&cfg.save_dir, false),
         CMD_VIDEOS => open_path(&cfg.video_dir, false),
+        CMD_HISTORY => match session_window("WispHistory") {
+            Some(h) => unsafe {
+                let _ = ShowWindow(h, SW_RESTORE);
+                let _ = SetForegroundWindow(h);
+            },
+            None => unsafe {
+                let _ = AllowSetForegroundWindow(ASFW_ANY);
+                if let Ok(exe) = std::env::current_exe() {
+                    let _ = std::process::Command::new(exe).args(["--session", "history", "0"]).spawn();
+                }
+            },
+        },
         CMD_SETTINGS => match session_window("WispSettings") {
             Some(h) => unsafe {
                 let _ = ShowWindow(h, SW_RESTORE);

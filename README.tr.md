@@ -72,6 +72,8 @@ pek değişmez.
 - PNG, JPG, BMP veya TIFF olarak kaydetme; her seferinde sorarak ya da doğrudan bir klasöre
 - Resmi diğer pencerelerin üstüne sabitleme; yakınlaştırma, saydamlaştırma, sonra yeniden kopyalama
 - Windows'un kendi metin tanıma motoruyla **OCR**: indirilecek bir şey yok
+- **Aranabilir geçmiş** (varsayılan kapalı): son çekimler bilgisayarınızda kalır, içindeki yazıyla bulunur;
+  örneğin içinde "fatura" geçen tüm ekran görüntüleri
 
 **Kayıt**
 - Herhangi bir bölgeyi ekran kartının kendi kodlayıcısıyla MP4'e (H.264) kaydetme
@@ -272,7 +274,7 @@ Kaynak düzeni için [İngilizce README](README.md#building-from-source)'ye bak�
 
 ## Bilinen sınırlar
 
-- Çekim geçmişi henüz yok. Kaydırmalı çekim yalnızca aşağı kaydırmayı izler.
+- Kaydırmalı çekim yalnızca aşağı kaydırmayı izler.
 - Çizimleri taşıyabilir, silebilir, metinleri düzenleyebilirsiniz; ama diğer çizimlerin rengi ya da kalınlığı henüz
   değiştirilemiyor.
 - Kayıtlarda ses yok ve kayıt tek monitörle sınırlı (bölge monitörün sınırında kırpılır).

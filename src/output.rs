@@ -150,6 +150,29 @@ pub fn encode(img: &Img, fmt: Fmt) -> Result<Vec<u8>> {
     }
 }
 
+/// Read an image file (any format WIC knows) as opaque pixels.
+pub fn load(path: &Path) -> Option<Img> {
+    unsafe {
+        let f = wic().ok()?;
+        let p = wide(&path.to_string_lossy());
+        let dec = f.CreateDecoderFromFilename(PCWSTR(p.as_ptr()), None, GENERIC_READ, WICDecodeMetadataCacheOnDemand).ok()?;
+        let fr = dec.GetFrame(0).ok()?;
+        let conv = f.CreateFormatConverter().ok()?;
+        conv.Initialize(&fr, &GUID_WICPixelFormat32bppBGR, WICBitmapDitherTypeNone, None, 0.0, WICBitmapPaletteTypeCustom)
+            .ok()?;
+        let (mut w, mut h) = (0u32, 0u32);
+        conv.GetSize(&mut w, &mut h).ok()?;
+        if w == 0 || h == 0 || w > 32768 || h > 65536 {
+            return None;
+        }
+        let mut img = Img::new(w as i32, h as i32);
+        let bytes = std::slice::from_raw_parts_mut(img.px.as_mut_ptr() as *mut u8, img.px.len() * 4);
+        conv.CopyPixels(std::ptr::null(), w * 4, bytes).ok()?;
+        img.force_opaque();
+        Some(img)
+    }
+}
+
 pub fn save(img: &Img, path: &Path) -> Result<()> {
     let bytes = encode(img, fmt_for(path))?;
     if let Some(dir) = path.parent() {

@@ -20,6 +20,8 @@ struct Sess {
     rec: Option<(record::Recorder, recui::RecUi)>,
     rec_start: Option<std::time::Instant>,
     ocr_pending: bool,
+    /// History images still being read by OCR in the background.
+    indexing: u32,
     /// A modal save dialog is open: its message loop also dispatches our exit checks.
     dialog: bool,
 }
@@ -63,11 +65,22 @@ pub fn run(kind: &str, veil: Option<HWND>, extra: &[String]) {
         };
         crate::set_app_hwnd(hwnd);
         let cfg = config::load();
-        S.with(|s| *s.borrow_mut() = Some(Sess { cfg: cfg.clone(), rec: None, rec_start: None, ocr_pending: false, dialog: false }));
+        S.with(|s| *s.borrow_mut() = Some(Sess { cfg: cfg.clone(), rec: None, rec_start: None, ocr_pending: false, indexing: 0, dialog: false }));
 
         let started = match kind {
             "record" => overlay::open(overlay::Mode::Record, cfg.magnifier, cfg.detect_elements, veil),
             "settings" => crate::settings::open(),
+            "history" => crate::history::open(),
+            // a history image pinned from the history window
+            "pinpath" => match extra.first().and_then(|p| output::load(std::path::Path::new(p))) {
+                Some(img) => {
+                    let mut p = POINT::default();
+                    let _ = GetCursorPos(&mut p);
+                    pin::pin(img, p.x - 20, p.y - 20);
+                    true
+                }
+                None => false,
+            },
             "delay" => {
                 let secs = extra.first().and_then(|s| s.parse().ok()).unwrap_or(cfg.capture_delay);
                 let (mag, deep) = (cfg.magnifier, cfg.detect_elements);
@@ -115,7 +128,7 @@ pub fn run(kind: &str, veil: Option<HWND>, extra: &[String]) {
         }
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
-            if ocr::pretranslate(&msg) {
+            if ocr::pretranslate(&msg) || crate::history::pretranslate(&msg) {
                 continue;
             }
             let _ = TranslateMessage(&msg);
@@ -157,9 +170,20 @@ fn has_windows() -> bool {
 }
 
 fn maybe_exit() {
-    let busy = with(|s| s.rec.is_some() || s.ocr_pending || s.dialog).unwrap_or(false);
+    let busy = with(|s| s.rec.is_some() || s.ocr_pending || s.dialog || s.indexing > 0).unwrap_or(false);
     if !busy && !overlay::is_open() && !has_windows() {
         unsafe { PostQuitMessage(0) };
+    }
+}
+
+/// Put a finished capture into the history (when it is on) and read its text.
+fn keep(img: &crate::img::Img, cfg: &Config) {
+    let Some(p) = crate::history::add(img, cfg) else { return };
+    if cfg.history_ocr {
+        if let Some(app) = crate::app_hwnd() {
+            with(|s| s.indexing += 1);
+            crate::history::index(img.clone(), p, app);
+        }
     }
 }
 
@@ -168,6 +192,11 @@ fn handle_done() {
     let Some(app) = crate::app_hwnd() else { return };
     let Some(cfg) = with(|s| s.cfg.clone()) else { return };
     use overlay::Action;
+    if matches!(done.action, Action::Copy | Action::CopyFile | Action::Save | Action::Pin | Action::Ocr) {
+        if let Some(img) = &done.img {
+            keep(img, &cfg);
+        }
+    }
     match done.action {
         Action::Copy => {
             if let Some(img) = &done.img {
@@ -234,6 +263,7 @@ fn handle_done() {
                 done.rect,
                 Box::new(move |img| {
                     if let Some(img) = img {
+                        keep(&img, &cfg);
                         if let Some(app) = crate::app_hwnd() {
                             if output::copy_image(app, &img) {
                                 notify(t("scroll.copied"), &tf("scroll.copied_body", &[&img.w.to_string(), &img.h.to_string()]));
@@ -426,6 +456,11 @@ unsafe extern "system" fn proc_(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) ->
             LRESULT(0)
         }
         WM_APP_MAYBE_EXIT => {
+            maybe_exit();
+            LRESULT(0)
+        }
+        crate::history::WM_APP_INDEXED => {
+            with(|s| s.indexing = s.indexing.saturating_sub(1));
             maybe_exit();
             LRESULT(0)
         }

@@ -19,6 +19,11 @@
   the frames are stitched into one tall image, copied to the clipboard and pinned. *Auto* scrolls by itself and
   stops at the end of the page. A sticky header or footer appears once. `Enter` finishes, `Esc` cancels.
 - A pin larger than the screen opens shrunk to fit.
+- Capture history, off by default (*Settings > Capture*, or *Capture history* in the tray menu). Finished
+  captures are kept in `%LOCALAPPDATA%\WispShot\history` (the last 100, at most 500 MB, both adjustable in
+  `wispshot.ini`). Windows OCR reads the text in each one in the background, so the history window can search
+  inside the pictures. Click copies, double-click pins, right-click offers copy as file, show in folder and
+  delete. Nothing is kept while the history is off.
 
 ## [0.2.1] - 2026-11-11
 

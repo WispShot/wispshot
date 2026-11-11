@@ -38,6 +38,7 @@ enum Tg {
     InkFade,
     Magnifier,
     Detect,
+    History,
     Autostart,
 }
 
@@ -84,26 +85,26 @@ const GROUPS: [(Scope, &str); 4] = [
 /// Text reserve of a folder card (its subtitle is a path, trimmed from the middle).
 const FOLDER_RESERVE: f32 = 210.0;
 
-struct Pal {
-    bg: u32,
-    nav: u32,
-    card: u32,
-    card_border: u32,
-    text: u32,
-    sub: u32,
-    accent: u32,
-    on_accent: u32,
-    hover: u32,
-    selected: u32,
-    btn: u32,
-    btn_hover: u32,
-    btn_border: u32,
-    off_border: u32,
-    danger: u32,
-    divider: u32,
+pub(crate) struct Pal {
+    pub bg: u32,
+    pub nav: u32,
+    pub card: u32,
+    pub card_border: u32,
+    pub text: u32,
+    pub sub: u32,
+    pub accent: u32,
+    pub on_accent: u32,
+    pub hover: u32,
+    pub selected: u32,
+    pub btn: u32,
+    pub btn_hover: u32,
+    pub btn_border: u32,
+    pub off_border: u32,
+    pub danger: u32,
+    pub divider: u32,
 }
 
-fn pal(light: bool) -> Pal {
+pub(crate) fn pal(light: bool) -> Pal {
     let a = crate::traymenu::accent();
     if light {
         Pal {
@@ -325,7 +326,7 @@ pub fn open() -> bool {
 }
 
 /// Title bar in the same colour as the window (Windows 11; ignored elsewhere).
-fn title_bar(hwnd: HWND, light: bool) {
+pub(crate) fn title_bar(hwnd: HWND, light: bool) {
     unsafe {
         let dark: BOOL = (!light).into();
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark as *const _ as *const _, 4);
@@ -357,7 +358,7 @@ fn tray_memory() -> Option<f64> {
 
 // ================================================================== drawing
 
-fn txt(rt: &ID2D1RenderTarget, s: &str, f: &IDWriteTextFormat, r: D2D_RECT_F, c: u32) {
+pub(crate) fn txt(rt: &ID2D1RenderTarget, s: &str, f: &IDWriteTextFormat, r: D2D_RECT_F, c: u32) {
     let w: Vec<u16> = s.encode_utf16().collect();
     unsafe {
         if let Ok(b) = brush(rt, c) {
@@ -366,7 +367,7 @@ fn txt(rt: &ID2D1RenderTarget, s: &str, f: &IDWriteTextFormat, r: D2D_RECT_F, c:
     }
 }
 
-fn rrect(rt: &ID2D1RenderTarget, r: D2D_RECT_F, rad: f32, fill: u32, stroke: u32) {
+pub(crate) fn rrect(rt: &ID2D1RenderTarget, r: D2D_RECT_F, rad: f32, fill: u32, stroke: u32) {
     let rr = D2D1_ROUNDED_RECT { rect: r, radiusX: rad, radiusY: rad };
     unsafe {
         if fill >> 24 != 0 {
@@ -408,6 +409,7 @@ impl St {
             Tg::InkFade => c.ink_fade,
             Tg::Magnifier => c.magnifier,
             Tg::Detect => c.detect_elements,
+            Tg::History => c.history,
             Tg::Autostart => self.autostart,
         }
     }
@@ -630,6 +632,10 @@ impl St {
                 let secs: Vec<&str> = secs.iter().map(|s| s.as_str()).collect();
                 card(self, &mut y, t("capture.delay"), t("capture.delay_sub"), 230.0, &mut body, &mut |st, r, h| {
                     st.seg(rt, r, Sg::Delay, &secs, h)
+                });
+                let sub = tf("capture.history_sub", &[&self.cfg.history_keep.to_string()]);
+                card(self, &mut y, t("capture.history"), &sub, 140.0, &mut body, &mut |st, r, h| {
+                    st.toggle(rt, r, Tg::History, h)
                 });
             }
             4 => {
@@ -923,6 +929,7 @@ impl St {
                     Tg::InkFade => c.ink_fade = v,
                     Tg::Magnifier => c.magnifier = v,
                     Tg::Detect => c.detect_elements = v,
+                    Tg::History => c.history = v,
                     Tg::Autostart => {
                         crate::set_autostart(v);
                         self.autostart = crate::autostart_enabled();

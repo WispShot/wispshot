@@ -274,6 +274,12 @@ Kaynak düzeni için [İngilizce README](README.md#building-from-source)'ye bak�
   Kayıt bitince hepsi geri gelir.
 - Yalnızca Windows. Yakalama ve pencere katmanı doğrudan Win32 ile yazıldı.
 
+## WispShot'a destek olun
+
+WispShot ücretsizdir ve öyle kalacak: reklam, hesap veya telemetri yok. İşinize yarıyorsa geliştirilmesine
+[GitHub Sponsors](https://github.com/sponsors/efekaputlu) üzerinden destek olabilirsiniz. Bir yıldız da yardımcı olur;
+projeyi başkalarının bulmasını kolaylaştırır.
+
 ## Yıldız geçmişi
 
 <a href="https://star-history.com/#WispShot/wispshot&Date">

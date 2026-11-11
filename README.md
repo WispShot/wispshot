@@ -291,6 +291,12 @@ To add a language, copy `lang/en.txt`, translate the values and add it to `LANGS
   when the recording ends.
 - Windows only. Capture and windowing are written straight against Win32.
 
+## Support WispShot
+
+WispShot is free and stays free, with no ads, accounts or telemetry. If it saves you time, you can support its
+development through [GitHub Sponsors](https://github.com/sponsors/efekaputlu). A star helps too: it makes the project
+easier for others to find.
+
 ## Star history
 
 <a href="https://star-history.com/#WispShot/wispshot&Date">

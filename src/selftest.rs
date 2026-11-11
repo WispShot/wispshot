@@ -64,7 +64,7 @@ pub fn run(dir: &Path) -> i32 {
 
     // 4. WIC encoding
     let out = annotated.unwrap_or(fx);
-    for name in ["selftest.png", "selftest.jpg"] {
+    for name in ["selftest.png", "selftest.jpg", "selftest.bmp", "selftest.tif"] {
         let p = dir.join(name);
         let r = crate::output::save(&out, &p)
             .map_err(|e| e.message())
@@ -108,7 +108,16 @@ pub fn run(dir: &Path) -> i32 {
             Err("empty file".into())
         }
     });
-    step("video (h.264)", false, r);
+    step("video (h.264)", false, r.clone());
+
+    // 7. GIF made from that video (decode + palette + encode)
+    if r.is_ok() {
+        let g = dir.join("selftest.gif");
+        let r = crate::gif::from_mp4(&p, &g, 15, 800)
+            .and_then(|_| std::fs::metadata(&g).map_err(|e| e.to_string()))
+            .map(|m| format!("{} bytes", m.len()));
+        step("gif", false, r);
+    }
 
     let _ = writeln!(log, "{}", if core_ok { "OK" } else { "FAILED" });
     let _ = std::fs::write(dir.join("selftest.txt"), log);

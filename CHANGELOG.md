@@ -10,6 +10,11 @@
 - Delayed screenshot: `Ctrl+Shift+F1` (or the tray menu) counts down 3 seconds, then opens the editor, so you
   can open a menu or tooltip first. Press it again to cancel. The delay (3, 5 or 10 seconds) is under
   *Settings > Capture*.
+- Choose the file format: PNG, JPG, BMP or TIFF for screenshots (*Settings > Screenshots*), MP4 or GIF for
+  recordings (*Settings > Video*). The save dialog starts with the chosen format. A GIF is made from the recording
+  when it ends, with one shared palette, only the changed part of each frame stored, and frames that don't
+  change merged. JPG quality and GIF frame rate and width can be set in `wispshot.ini`. Everything uses the
+  encoders built into Windows; nothing extra is bundled.
 
 ## [0.2.1] - 2026-11-11
 

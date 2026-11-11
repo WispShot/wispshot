@@ -34,9 +34,17 @@ pub struct Config {
     pub save_ask: bool,
     /// Balloon after a screenshot was saved (click opens the folder).
     pub save_notify: bool,
+    /// Screenshot file format (the save dialog preselects it).
+    pub image_format: crate::output::Fmt,
+    pub jpeg_quality: u32,
     pub video_dir: PathBuf,
     pub video_ask: bool,
     pub video_notify: bool,
+    /// Save recordings as GIF (converted from the MP4 when recording ends).
+    pub gif: bool,
+    pub gif_fps: u32,
+    /// Widest GIF in pixels; larger recordings are scaled down. 0 = keep the size.
+    pub gif_width: u32,
     pub fps: u32,
     pub cursor: bool,
     pub magnifier: bool,
@@ -92,12 +100,14 @@ fn default_ini() -> String {
     }
     s += &format!("; {}\npause_in_fullscreen = true\n", t("ini.pause_fullscreen"));
     s += &format!(
-        "\n[output]\n; {}\nsave_dir =\n; {}\nsave_mode = ask\n; {}\nnotify = true\n",
+        "\n[output]\n; {}\nsave_dir =\n; {}\nsave_mode = ask\n; {}\nnotify = true\n; {}\nformat = png\n; {}\njpeg_quality = 90\n",
         t("ini.save_dir"),
         t("ini.save_mode"),
-        t("ini.notify")
+        t("ini.notify"),
+        t("ini.format"),
+        t("ini.jpeg_quality")
     );
-    s += &format!("\n[record]\n; {}\nvideo_dir =\n; {}\nsave_mode = folder\nnotify = true\nfps = 30\ncursor = true\n; {}\nink_fade = true\n", t("ini.video_dir"), t("ini.video_mode"), t("ini.ink_fade"));
+    s += &format!("\n[record]\n; {}\nvideo_dir =\n; {}\nsave_mode = folder\nnotify = true\nfps = 30\ncursor = true\n; {}\nink_fade = true\n; {}\nformat = mp4\n; {}\ngif_fps = 15\ngif_width = 800\n", t("ini.video_dir"), t("ini.video_mode"), t("ini.ink_fade"), t("ini.video_format"), t("ini.gif"));
     s += &format!("\n[capture]\nmagnifier = true\n; {}\ndetect_elements = false\n; {}\ndelay = 3\n", t("ini.detect"), t("ini.delay"));
     s += &format!("\n[keys]\n; {}\n", t("ini.keys"));
     for d in DEFS.iter().filter(|d| d.scope != Scope::Global) {
@@ -167,9 +177,14 @@ pub fn save(cfg: &Config) -> std::io::Result<()> {
         ("output", "save_dir", dir(&cfg.save_dir, default_save_dir())),
         ("output", "save_mode", mode(cfg.save_ask)),
         ("output", "notify", tf(cfg.save_notify)),
+        ("output", "format", cfg.image_format.ext().to_string()),
+        ("output", "jpeg_quality", cfg.jpeg_quality.to_string()),
         ("record", "video_dir", dir(&cfg.video_dir, default_video_dir())),
         ("record", "save_mode", mode(cfg.video_ask)),
         ("record", "notify", tf(cfg.video_notify)),
+        ("record", "format", if cfg.gif { "gif" } else { "mp4" }.to_string()),
+        ("record", "gif_fps", cfg.gif_fps.to_string()),
+        ("record", "gif_width", cfg.gif_width.to_string()),
         ("record", "fps", cfg.fps.to_string()),
         ("record", "cursor", tf(cfg.cursor)),
         ("record", "ink_fade", tf(cfg.ink_fade)),
@@ -336,9 +351,14 @@ pub fn load() -> Config {
         save_dir: dir("output.save_dir", &FOLDERID_Pictures),
         save_ask: ask("output.save_mode", Some("output.quick_save"), true),
         save_notify: b("output.notify", true),
+        image_format: crate::output::Fmt::parse(&get("output.format", "png")).unwrap_or(crate::output::Fmt::Png),
+        jpeg_quality: get("output.jpeg_quality", "90").parse::<u32>().unwrap_or(90).clamp(1, 100),
         video_dir: dir("record.video_dir", &FOLDERID_Videos),
         video_ask: ask("record.save_mode", None, false),
         video_notify: b("record.notify", true),
+        gif: get("record.format", "mp4").eq_ignore_ascii_case("gif"),
+        gif_fps: get("record.gif_fps", "15").parse::<u32>().unwrap_or(15).clamp(1, 50),
+        gif_width: get("record.gif_width", "800").parse::<u32>().unwrap_or(800),
         fps: get("record.fps", "30").parse().unwrap_or(30),
         cursor: b("record.cursor", true),
         magnifier: b("capture.magnifier", true),
@@ -347,6 +367,7 @@ pub fn load() -> Config {
         ink_fade: b("record.ink_fade", true),
     };
     crate::i18n::set(&cfg.language);
+    crate::output::set_jpeg_quality(cfg.jpeg_quality);
     THEME.store(cfg.theme as u8, Ordering::Relaxed);
     keys::activate(&cfg.keys);
     cfg

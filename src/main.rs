@@ -15,6 +15,7 @@ mod capture;
 mod config;
 mod countdown;
 mod gfx;
+mod gif;
 mod i18n;
 mod img;
 mod ink;

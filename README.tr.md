@@ -68,13 +68,13 @@ pek değişmez.
 
 **Paylaşma**
 - Panoya kopyalama ya da **dosya olarak kopyalama**: doğrudan Explorer'a, e-postaya, sohbet uygulamalarına yapıştırılır
-- PNG, JPG veya BMP olarak kaydetme; her seferinde sorarak ya da doğrudan bir klasöre
+- PNG, JPG, BMP veya TIFF olarak kaydetme; her seferinde sorarak ya da doğrudan bir klasöre
 - Resmi diğer pencerelerin üstüne sabitleme; yakınlaştırma, saydamlaştırma, sonra yeniden kopyalama
 - Windows'un kendi metin tanıma motoruyla **OCR**: indirilecek bir şey yok
 
 **Kayıt**
 - Herhangi bir bölgeyi ekran kartının kendi kodlayıcısıyla MP4'e (H.264) kaydetme
-  (Intel Quick Sync, NVIDIA NVENC, AMD AMF)
+  (Intel Quick Sync, NVIDIA NVENC, AMD AMF) ya da hareketli GIF olarak kaydetme
 - **Kayıt sürerken üzerine çizme**: kalem, fosforlu kalem, ok, çerçeve ve adım numaraları birkaç saniyede
   silinir ya da isterseniz kalır. Çizimler videoya girer, araç çubuğu girmez
 - Döndürülmüş ve dikey monitörlerle çalışır, imleci de kaydeder

@@ -67,12 +67,13 @@ times how long it takes until the screen visibly changes. Your numbers will diff
 
 **Share**
 - Copy to the clipboard, or **copy as a file** to paste straight into Explorer, email or chat apps
-- Save as PNG, JPG or BMP, either asking every time or straight into a folder
+- Save as PNG, JPG, BMP or TIFF, either asking every time or straight into a folder
 - Pin an image on top of other windows; zoom it, make it see-through, copy it again later
 - **OCR** with the text recognition built into Windows: nothing to download
 
 **Record**
-- Record any area to MP4 (H.264) with the GPU's own encoder (Intel Quick Sync, NVIDIA NVENC, AMD AMF)
+- Record any area to MP4 (H.264) with the GPU's own encoder (Intel Quick Sync, NVIDIA NVENC, AMD AMF),
+  or to an animated GIF
 - **Draw on the recording** while it runs: pen, highlighter, arrows, boxes and step numbers that fade after a few
   seconds, or stay if you prefer. They end up in the video, the toolbar doesn't
 - Works with rotated and portrait monitors, and records the cursor

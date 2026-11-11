@@ -47,6 +47,8 @@ enum Sg {
     VideoMode,
     Fps,
     Delay,
+    ImageFmt,
+    VideoFmt,
     Language,
     Theme,
 }
@@ -416,6 +418,8 @@ impl St {
             Sg::VideoMode => Some(!self.cfg.video_ask as usize),
             Sg::Fps => FPS.iter().position(|f| *f == self.cfg.fps),
             Sg::Delay => DELAYS.iter().position(|d| *d == self.cfg.capture_delay),
+            Sg::ImageFmt => output::Fmt::ALL.iter().position(|f| *f == self.cfg.image_format),
+            Sg::VideoFmt => Some(self.cfg.gif as usize),
             Sg::Language => {
                 if self.cfg.language.eq_ignore_ascii_case("system") {
                     Some(0)
@@ -579,6 +583,10 @@ impl St {
                 card(self, &mut y, t("shots.notify"), t("shots.notify_sub"), 140.0, &mut body, &mut |st, r, h| {
                     st.toggle(rt, r, Tg::SaveNotify, h)
                 });
+                let fmts: Vec<&str> = output::Fmt::ALL.iter().map(|f| f.label()).collect();
+                card(self, &mut y, t("shots.format"), t("shots.format_sub"), 300.0, &mut body, &mut |st, r, h| {
+                    st.seg(rt, r, Sg::ImageFmt, &fmts, h)
+                });
             }
             2 => {
                 card(self, &mut y, t("video.save"), t("video.save_sub"), 300.0, &mut body, &mut |st, r, h| {
@@ -590,6 +598,9 @@ impl St {
                 });
                 card(self, &mut y, t("video.notify"), "", 140.0, &mut body, &mut |st, r, h| {
                     st.toggle(rt, r, Tg::VideoNotify, h)
+                });
+                card(self, &mut y, t("video.format"), t("video.format_sub"), 230.0, &mut body, &mut |st, r, h| {
+                    st.seg(rt, r, Sg::VideoFmt, &["MP4", "GIF"], h)
                 });
                 card(self, &mut y, t("video.fps"), t("video.fps_sub"), 230.0, &mut body, &mut |st, r, h| {
                     st.seg(rt, r, Sg::Fps, &["15", "24", "30", "60"], h)
@@ -933,6 +944,8 @@ impl St {
                     Sg::VideoMode => self.cfg.video_ask = i == 0,
                     Sg::Fps => self.cfg.fps = FPS[i],
                     Sg::Delay => self.cfg.capture_delay = DELAYS[i],
+                    Sg::ImageFmt => self.cfg.image_format = output::Fmt::ALL[i],
+                    Sg::VideoFmt => self.cfg.gif = i == 1,
                     Sg::Language => {
                         self.cfg.language = if i == 0 { "system".into() } else { i18n::LANGS[i - 1].0.into() };
                         i18n::set(&self.cfg.language);

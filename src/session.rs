@@ -18,6 +18,7 @@ pub const WM_APP_MAYBE_EXIT: u32 = WM_APP + 40;
 struct Sess {
     cfg: Config,
     rec: Option<(record::Recorder, recui::RecUi)>,
+    rec_start: Option<std::time::Instant>,
     ocr_pending: bool,
     /// A modal save dialog is open: its message loop also dispatches our exit checks.
     dialog: bool,
@@ -62,7 +63,7 @@ pub fn run(kind: &str, veil: Option<HWND>, extra: &[String]) {
         };
         crate::set_app_hwnd(hwnd);
         let cfg = config::load();
-        S.with(|s| *s.borrow_mut() = Some(Sess { cfg: cfg.clone(), rec: None, ocr_pending: false, dialog: false }));
+        S.with(|s| *s.borrow_mut() = Some(Sess { cfg: cfg.clone(), rec: None, rec_start: None, ocr_pending: false, dialog: false }));
 
         let started = match kind {
             "record" => overlay::open(overlay::Mode::Record, cfg.magnifier, cfg.detect_elements, veil),
@@ -191,7 +192,7 @@ fn handle_done() {
         }
         Action::Save => {
             if let Some(img) = &done.img {
-                let name = output::timestamp_name("WispShot", "png");
+                let name = output::timestamp_name("WispShot", cfg.image_format.ext());
                 let target =
                     if cfg.save_ask { save_dialog(app, &cfg.save_dir, &name) } else { Some(cfg.save_dir.join(&name)) };
                 if let Some(p) = target {
@@ -276,8 +277,9 @@ fn start_recording(rect: RECT, cfg: &Config) {
     if with(|s| s.rec.is_some()).unwrap_or(true) {
         return;
     }
-    // "ask" mode records into the temp folder and moves the file once a location is chosen
-    let dir = if cfg.video_ask { output::temp_dir() } else { cfg.video_dir.clone() };
+    // "ask" mode records into the temp folder and moves the file once a location is chosen;
+    // a GIF is made from a temporary MP4 there as well
+    let dir = if cfg.video_ask || cfg.gif { output::temp_dir() } else { cfg.video_dir.clone() };
     let _ = std::fs::create_dir_all(&dir);
     let path = dir.join(output::timestamp_name("WispShot", "mp4"));
     // without the bar there would be no way to stop: don't start at all
@@ -286,7 +288,10 @@ fn start_recording(rect: RECT, cfg: &Config) {
         return;
     };
     let rec = record::Recorder::start(rect, cfg.fps, cfg.cursor, path);
-    with(|s| s.rec = Some((rec, ui)));
+    with(|s| {
+        s.rec = Some((rec, ui));
+        s.rec_start = Some(std::time::Instant::now());
+    });
     ipc_send(IPC_REC_ON, "");
 }
 
@@ -297,7 +302,19 @@ fn stop_recording() {
     let Some(cfg) = with(|s| s.cfg.clone()) else { return };
     match rec.stop() {
         Ok(p) => {
-            let (p, kept) = if cfg.video_ask { place_video(&p, &cfg) } else { (p, false) };
+            let long = with(|s| s.rec_start.take()).flatten().is_some_and(|t| t.elapsed().as_secs() > 10);
+            if cfg.gif && long {
+                notify("WispShot", t("saved.gif_wait"));
+            }
+            let p = if cfg.gif { make_gif(p, &cfg) } else { p };
+            let (p, kept) = if cfg.video_ask {
+                place_video(&p, &cfg)
+            } else if p.parent() != Some(cfg.video_dir.as_path()) {
+                let dst = cfg.video_dir.join(p.file_name().unwrap_or_default());
+                (if output::move_file(&p, &dst).is_ok() { dst } else { p }, false)
+            } else {
+                (p, false)
+            };
             ipc_send(IPC_LAST_FILE, &p.to_string_lossy());
             if kept {
                 // dialog cancelled: a recording is never thrown away
@@ -307,6 +324,23 @@ fn stop_recording() {
             }
         }
         Err(e) => notify(t("err.recording"), &e),
+    }
+}
+
+/// Turn the temporary MP4 into a GIF next to it. On failure the MP4 is kept (a
+/// recording is never thrown away) and the user is told why.
+fn make_gif(mp4: std::path::PathBuf, cfg: &Config) -> std::path::PathBuf {
+    let gif = mp4.with_extension("gif");
+    match crate::gif::from_mp4(&mp4, &gif, cfg.gif_fps, cfg.gif_width) {
+        Ok(()) => {
+            let _ = std::fs::remove_file(&mp4);
+            gif
+        }
+        Err(e) => {
+            let _ = std::fs::remove_file(&gif);
+            notify(t("err.gif"), &e);
+            mp4
+        }
     }
 }
 

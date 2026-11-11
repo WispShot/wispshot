@@ -16,26 +16,76 @@ const CF_UNICODETEXT: u32 = 13;
 const CF_DIB: u32 = 8;
 const CF_HDROP: u32 = 15;
 
-#[derive(Clone, Copy, PartialEq)]
+/// Image file formats Windows can write without extra codecs.
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Fmt {
     Png,
     Jpg,
     Bmp,
+    Tiff,
 }
 
-pub fn fmt_for(path: &Path) -> Fmt {
-    match path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
-        Some("jpg") | Some("jpeg") => Fmt::Jpg,
-        Some("bmp") => Fmt::Bmp,
-        _ => Fmt::Png,
+impl Fmt {
+    pub const ALL: [Fmt; 4] = [Fmt::Png, Fmt::Jpg, Fmt::Bmp, Fmt::Tiff];
+
+    pub fn ext(self) -> &'static str {
+        match self {
+            Fmt::Png => "png",
+            Fmt::Jpg => "jpg",
+            Fmt::Bmp => "bmp",
+            Fmt::Tiff => "tif",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Fmt::Png => "PNG",
+            Fmt::Jpg => "JPG",
+            Fmt::Bmp => "BMP",
+            Fmt::Tiff => "TIFF",
+        }
+    }
+
+    /// From an ini value or a file extension.
+    pub fn parse(s: &str) -> Option<Fmt> {
+        match s.trim().trim_start_matches('.').to_ascii_lowercase().as_str() {
+            "png" => Some(Fmt::Png),
+            "jpg" | "jpeg" => Some(Fmt::Jpg),
+            "bmp" => Some(Fmt::Bmp),
+            "tif" | "tiff" => Some(Fmt::Tiff),
+            _ => None,
+        }
     }
 }
 
-fn wic() -> Result<IWICImagingFactory> {
+pub fn fmt_for(path: &Path) -> Fmt {
+    path.extension().and_then(|e| e.to_str()).and_then(Fmt::parse).unwrap_or(Fmt::Png)
+}
+
+/// JPEG quality in percent, set from the settings once per process.
+static JPEG_QUALITY: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(90);
+
+pub fn set_jpeg_quality(q: u32) {
+    JPEG_QUALITY.store(q.clamp(1, 100) as u8, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn wic() -> Result<IWICImagingFactory> {
     unsafe { CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER) }
 }
 
-/// Encode as PNG/JPG/BMP. Opaque images are written as 24-bit (smaller files).
+/// Encoder option "ImageQuality" (0..1) for JPEG.
+unsafe fn set_quality(props: &windows::Win32::System::Com::StructuredStorage::IPropertyBag2, q: f32) {
+    use windows::Win32::System::Com::StructuredStorage::PROPBAG2;
+    use windows::Win32::System::Variant::*;
+    let mut name = wide("ImageQuality");
+    let bag = PROPBAG2 { pstrName: PWSTR(name.as_mut_ptr()), ..Default::default() };
+    let mut v = VARIANT::default();
+    (*v.Anonymous.Anonymous).vt = VT_R4;
+    (*v.Anonymous.Anonymous).Anonymous.fltVal = q;
+    let _ = props.Write(1, &bag, &v);
+}
+
+/// Encode as PNG/JPG/BMP/TIFF. Opaque images are written as 24-bit (smaller files).
 pub fn encode(img: &Img, fmt: Fmt) -> Result<Vec<u8>> {
     unsafe {
         let f = wic()?;
@@ -44,6 +94,7 @@ pub fn encode(img: &Img, fmt: Fmt) -> Result<Vec<u8>> {
             Fmt::Png => GUID_ContainerFormatPng,
             Fmt::Jpg => GUID_ContainerFormatJpeg,
             Fmt::Bmp => GUID_ContainerFormatBmp,
+            Fmt::Tiff => GUID_ContainerFormatTiff,
         };
         let enc = f.CreateEncoder(&container, std::ptr::null())?;
         enc.Initialize(&stream, WICBitmapEncoderNoCache)?;
@@ -51,6 +102,9 @@ pub fn encode(img: &Img, fmt: Fmt) -> Result<Vec<u8>> {
         let mut props: Option<windows::Win32::System::Com::StructuredStorage::IPropertyBag2> = None;
         enc.CreateNewFrame(&mut frame, &mut props)?;
         let frame = frame.ok_or_else(|| Error::from(E_FAIL))?;
+        if let (Fmt::Jpg, Some(p)) = (fmt, &props) {
+            set_quality(p, JPEG_QUALITY.load(std::sync::atomic::Ordering::Relaxed) as f32 / 100.0);
+        }
         frame.Initialize(props.as_ref())?;
         frame.SetSize(img.w as u32, img.h as u32)?;
         // 24bpp BGR
@@ -358,27 +412,37 @@ pub fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Standard "Save As" dialog (image types, or MP4 when `name` ends in .mp4). Returns chosen path.
+/// Standard "Save As" dialog. The extension of `name` picks the file types: .mp4 or .gif
+/// for a recording, otherwise the image types with that one preselected. Returns chosen path.
 pub fn save_dialog(owner: HWND, dir: &Path, name: &str) -> Option<PathBuf> {
     unsafe {
         let dlg: IFileSaveDialog = CoCreateInstance(&FileSaveDialog, None, CLSCTX_INPROC_SERVER).ok()?;
-        if name.ends_with(".mp4") {
+        let ext = Path::new(name).extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+        let video = ext == "mp4" || ext == "gif";
+        if ext == "mp4" {
             let _ = dlg.SetFileTypes(&[COMDLG_FILTERSPEC { pszName: w!("MP4 video"), pszSpec: w!("*.mp4") }]);
             let _ = dlg.SetDefaultExtension(w!("mp4"));
+        } else if ext == "gif" {
+            let _ = dlg.SetFileTypes(&[COMDLG_FILTERSPEC { pszName: w!("GIF"), pszSpec: w!("*.gif") }]);
+            let _ = dlg.SetDefaultExtension(w!("gif"));
         } else {
             let specs = [
                 COMDLG_FILTERSPEC { pszName: w!("PNG"), pszSpec: w!("*.png") },
                 COMDLG_FILTERSPEC { pszName: w!("JPEG"), pszSpec: w!("*.jpg;*.jpeg") },
                 COMDLG_FILTERSPEC { pszName: w!("BMP"), pszSpec: w!("*.bmp") },
+                COMDLG_FILTERSPEC { pszName: w!("TIFF"), pszSpec: w!("*.tif;*.tiff") },
             ];
             let _ = dlg.SetFileTypes(&specs);
-            let _ = dlg.SetDefaultExtension(w!("png"));
+            let fmt = Fmt::parse(&ext).unwrap_or(Fmt::Png);
+            let i = Fmt::ALL.iter().position(|f| *f == fmt).unwrap_or(0);
+            let _ = dlg.SetFileTypeIndex(i as u32 + 1);
+            let e = wide(fmt.ext());
+            let _ = dlg.SetDefaultExtension(PCWSTR(e.as_ptr()));
         }
         let n = wide(name);
         let _ = dlg.SetFileName(PCWSTR(n.as_ptr()));
         // Separate "last used folder" memory for images and videos (kept by Windows per
         // client GUID); `dir` is only the starting point until something was saved.
-        let video = name.ends_with(".mp4");
         let _ = dlg.SetClientGuid(if video {
             &GUID::from_u128(0x6f1d2c3e_8a4b_4e57_9c1a_2b7d5e0f9a31)
         } else {

@@ -355,8 +355,12 @@ pub fn confirm_upload(owner: HWND) -> bool {
     let mut now = config::load();
     now.upload_asked = true;
     let _ = config::save(&now);
+    // the answer counts for this session even if the ini could not be written
+    CONFIRMED.store(true, std::sync::atomic::Ordering::Relaxed);
     true
 }
+
+static CONFIRMED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Sends the capture with the upload settings as they are now (the session's copy may be
 /// older than what the user just confirmed). Never sends before the user said yes once.
@@ -368,7 +372,7 @@ fn upload(app: HWND, img: &crate::img::Img) {
         notify(t("upload.failed"), t("upload.no_url"));
         return;
     }
-    if !cfg.upload_asked {
+    if !cfg.upload_asked && !CONFIRMED.load(std::sync::atomic::Ordering::Relaxed) {
         return;
     }
     let site = host.site(&cfg.upload_url);

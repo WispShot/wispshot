@@ -2293,10 +2293,13 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
     }
     if msg == WM_APP_ASK_UPLOAD {
         // the question's modal loop sends this window messages: hold no &mut Ov across it
-        if (*p).closing {
+        // a second press while the question is open (or queued behind it) is ignored
+        static ASKING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if (*p).closing || ASKING.swap(true, std::sync::atomic::Ordering::Relaxed) {
             return LRESULT(0);
         }
         let ok = crate::session::confirm_upload(hwnd);
+        ASKING.store(false, std::sync::atomic::Ordering::Relaxed);
         let p = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut Ov;
         if ok && !p.is_null() && !(*p).closing {
             let ov = &mut *p;

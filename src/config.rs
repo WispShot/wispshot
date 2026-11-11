@@ -349,6 +349,8 @@ pub fn load() -> Config {
     let path = ini_path();
     let text = match std::fs::read_to_string(&path) {
         Ok(t) if !t.trim().is_empty() => t,
+        // empty or locked: most likely a save in progress; use the defaults without writing them
+        Ok(_) | Err(_) if path.exists() => default_ini(),
         _ => {
             // first run: comments in the Windows display language
             crate::i18n::set("system");

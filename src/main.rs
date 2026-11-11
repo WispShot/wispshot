@@ -13,6 +13,7 @@
 
 mod capture;
 mod config;
+mod countdown;
 mod gfx;
 mod i18n;
 mod img;
@@ -110,6 +111,7 @@ pub const WM_APP_REC_STOP: u32 = WM_APP + 3;
 const HK_CAPTURE: i32 = 1;
 const HK_RECORD: i32 = 2;
 const HK_PIN: i32 = 3;
+const HK_DELAY: i32 = 4;
 
 const CMD_CAPTURE: usize = 100;
 const CMD_RECORD: usize = 101;
@@ -124,6 +126,8 @@ const CMD_CLOSEPINS: usize = 108;
 const CMD_EXIT: usize = 109;
 /// `--menu`: open the tray menu at the cursor (tests, scripts)
 const CMD_MENU: usize = 111;
+/// Capture after `capture_delay` seconds; again cancels the countdown.
+const CMD_DELAY: usize = 112;
 
 // session -> resident messages (WM_COPYDATA dwData)
 pub const IPC_NOTIFY: usize = 1;
@@ -283,7 +287,12 @@ fn register_hotkeys(warn: bool) {
     };
     let mut failed = vec![];
     unsafe {
-        for (id, k) in [(HK_CAPTURE, K::Capture), (HK_RECORD, K::Record), (HK_PIN, K::PinClipboard)] {
+        for (id, k) in [
+            (HK_CAPTURE, K::Capture),
+            (HK_DELAY, K::CaptureDelayed),
+            (HK_RECORD, K::Record),
+            (HK_PIN, K::PinClipboard),
+        ] {
             let (hk, txt) = (cfg.hotkey(k), cfg.key_label(k));
             let _ = UnregisterHotKey(Some(app), id);
             // in a full-screen game the keys belong to the game; a running recording can still be stopped
@@ -568,7 +577,15 @@ fn tray_menu() {
         key: key.to_string(),
         danger: false,
     };
-    let mut rows = vec![item(CMD_CAPTURE, '\u{E722}', t("menu.capture"), &cfg.key_label(K::Capture))];
+    let mut rows = vec![
+        item(CMD_CAPTURE, '\u{E722}', t("menu.capture"), &cfg.key_label(K::Capture)),
+        item(
+            CMD_DELAY,
+            '\u{E916}',
+            &tf("menu.capture_delayed", &[&cfg.capture_delay.to_string()]),
+            &cfg.key_label(K::CaptureDelayed),
+        ),
+    ];
     rows.push(if recording {
         Row::Item {
             id: CMD_RECORD,
@@ -702,6 +719,33 @@ fn spawn_session(kind: &str) {
     }
 }
 
+/// Ends a running delayed-capture countdown; false if there was none.
+fn cancel_countdown() -> bool {
+    match session_window("WispDelay") {
+        Some(h) => unsafe {
+            let _ = PostMessageW(Some(h), WM_CLOSE, WPARAM(0), LPARAM(0));
+            true
+        },
+        None => false,
+    }
+}
+
+/// Starts a countdown session; it opens the capture editor by itself when the time is up.
+fn spawn_delayed(secs: u32) {
+    if session_window("WispOverlay").is_some()
+        || session_window("WispVeil").is_some_and(|v| unsafe { IsWindowVisible(v).as_bool() })
+    {
+        return;
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        let mut c = std::process::Command::new(exe);
+        c.args(["--session", "delay", "0", &secs.to_string()]);
+        if let Err(e) = c.spawn() {
+            notify("WispShot", &tf("err.session", &[&e.to_string()]));
+        }
+    }
+}
+
 /// Posts WM_CLOSE to every pin (each may live in its own session process).
 pub fn close_all_pins() {
     unsafe extern "system" fn each(h: HWND, _: LPARAM) -> BOOL {
@@ -723,7 +767,16 @@ fn command(id: usize) {
     let Some(app) = app_hwnd() else { return };
     let Some(cfg) = with(|s| s.cfg.clone()) else { return };
     match id {
-        CMD_CAPTURE => spawn_session("capture"),
+        CMD_CAPTURE => {
+            // the capture key during a countdown: take it now
+            cancel_countdown();
+            spawn_session("capture")
+        }
+        CMD_DELAY => {
+            if !cancel_countdown() {
+                spawn_delayed(cfg.capture_delay);
+            }
+        }
         CMD_RECORD => match session_window("WispRecPill") {
             Some(pill) => unsafe {
                 // the session may ask where to save: let it come to the front
@@ -781,6 +834,7 @@ unsafe extern "system" fn app_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             }
             match wp.0 as i32 {
                 HK_CAPTURE => command(CMD_CAPTURE),
+                HK_DELAY => command(CMD_DELAY),
                 HK_RECORD => command(CMD_RECORD),
                 HK_PIN => command(CMD_PIN),
                 _ => {}

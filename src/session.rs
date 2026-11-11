@@ -67,6 +67,18 @@ pub fn run(kind: &str, veil: Option<HWND>, extra: &[String]) {
         let started = match kind {
             "record" => overlay::open(overlay::Mode::Record, cfg.magnifier, cfg.detect_elements, veil),
             "settings" => crate::settings::open(),
+            "delay" => {
+                let secs = extra.first().and_then(|s| s.parse().ok()).unwrap_or(cfg.capture_delay);
+                let (mag, deep) = (cfg.magnifier, cfg.detect_elements);
+                crate::countdown::start(
+                    secs,
+                    Box::new(move || {
+                        if !overlay::open(overlay::Mode::Capture, mag, deep, None) {
+                            poke();
+                        }
+                    }),
+                )
+            }
             // hand-offs from a capture session: a fresh process that never loaded Direct2D
             "pinfile" | "ocrfile" => match read_handoff(extra) {
                 Some((img, r)) => {
@@ -128,7 +140,7 @@ fn has_windows() -> bool {
         let mut cls = [0u16; 32];
         let n = GetClassNameW(h, &mut cls) as usize;
         let c = String::from_utf16_lossy(&cls[..n]);
-        if matches!(c.as_str(), "WispOverlay" | "WispPin" | "WispOcr" | "WispRecPill")
+        if matches!(c.as_str(), "WispOverlay" | "WispDelay" | "WispPin" | "WispOcr" | "WispRecPill")
             || IsWindowVisible(h).as_bool() && c != "WispSession" && c != "WispVeil"
         {
             *(lp.0 as *mut bool) = true;

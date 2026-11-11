@@ -46,6 +46,7 @@ enum Sg {
     SaveMode,
     VideoMode,
     Fps,
+    Delay,
     Language,
     Theme,
 }
@@ -71,6 +72,7 @@ const PAGES: [(&str, char); 6] = [
     ("page.about", '\u{E946}'),
 ];
 const FPS: [u32; 4] = [15, 24, 30, 60];
+const DELAYS: [u32; 3] = [3, 5, 10];
 const GROUPS: [(Scope, &str); 4] = [
     (Scope::Global, "keys.group_global"),
     (Scope::Editor, "keys.group_editor"),
@@ -413,6 +415,7 @@ impl St {
             Sg::SaveMode => Some(!self.cfg.save_ask as usize),
             Sg::VideoMode => Some(!self.cfg.video_ask as usize),
             Sg::Fps => FPS.iter().position(|f| *f == self.cfg.fps),
+            Sg::Delay => DELAYS.iter().position(|d| *d == self.cfg.capture_delay),
             Sg::Language => {
                 if self.cfg.language.eq_ignore_ascii_case("system") {
                     Some(0)
@@ -611,6 +614,11 @@ impl St {
                 let sub = tf("capture.detect_sub", &[&keys::display(self.cfg.key(K::Detect))]);
                 card(self, &mut y, t("capture.detect"), &sub, 140.0, &mut body, &mut |st, r, h| {
                     st.toggle(rt, r, Tg::Detect, h)
+                });
+                let secs: Vec<String> = DELAYS.iter().map(|d| tf("capture.delay_secs", &[&d.to_string()])).collect();
+                let secs: Vec<&str> = secs.iter().map(|s| s.as_str()).collect();
+                card(self, &mut y, t("capture.delay"), t("capture.delay_sub"), 230.0, &mut body, &mut |st, r, h| {
+                    st.seg(rt, r, Sg::Delay, &secs, h)
                 });
             }
             4 => {
@@ -924,6 +932,7 @@ impl St {
                     Sg::SaveMode => self.cfg.save_ask = i == 0,
                     Sg::VideoMode => self.cfg.video_ask = i == 0,
                     Sg::Fps => self.cfg.fps = FPS[i],
+                    Sg::Delay => self.cfg.capture_delay = DELAYS[i],
                     Sg::Language => {
                         self.cfg.language = if i == 0 { "system".into() } else { i18n::LANGS[i - 1].0.into() };
                         i18n::set(&self.cfg.language);

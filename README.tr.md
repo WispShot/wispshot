@@ -130,6 +130,7 @@ Bunlar varsayılanlardır. Sabit tuşlar (`Esc`, `Enter`, oklar, `Delete` ve met
 | Her yerde | |
 |---|---|
 | `F1` | Ekran görüntüsü al |
+| `Ctrl+Shift+F1` | Birkaç saniye sonra ekran görüntüsü al (tekrar basınca iptal), menü ve ipuçları için |
 | `Shift+F1` | Bölge kaydını başlat / durdur |
 | `F3` | Panodaki resmi ekrana sabitle |
 | `Shift+F2` (kayıt sırasında) | Kaydın üzerine çiz |

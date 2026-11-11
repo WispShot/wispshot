@@ -204,7 +204,7 @@ fn with<R>(f: impl FnOnce(&mut Menu) -> R) -> Option<R> {
     MENU.with(|m| m.try_borrow_mut().ok().and_then(|mut m| m.as_mut().map(f)))
 }
 
-const W: f32 = 288.0;
+const W: f32 = 320.0;
 const PAD: f32 = 4.0;
 const ROW: f32 = 32.0;
 const SEP: f32 = 9.0;

@@ -41,6 +41,8 @@ pub struct Config {
     pub cursor: bool,
     pub magnifier: bool,
     pub detect_elements: bool,
+    /// Seconds the delayed capture waits.
+    pub capture_delay: u32,
     /// Drawings on a recording fade out after a few seconds (steps stay).
     pub ink_fade: bool,
 }
@@ -96,7 +98,7 @@ fn default_ini() -> String {
         t("ini.notify")
     );
     s += &format!("\n[record]\n; {}\nvideo_dir =\n; {}\nsave_mode = folder\nnotify = true\nfps = 30\ncursor = true\n; {}\nink_fade = true\n", t("ini.video_dir"), t("ini.video_mode"), t("ini.ink_fade"));
-    s += &format!("\n[capture]\nmagnifier = true\n; {}\ndetect_elements = false\n", t("ini.detect"));
+    s += &format!("\n[capture]\nmagnifier = true\n; {}\ndetect_elements = false\n; {}\ndelay = 3\n", t("ini.detect"), t("ini.delay"));
     s += &format!("\n[keys]\n; {}\n", t("ini.keys"));
     for d in DEFS.iter().filter(|d| d.scope != Scope::Global) {
         s += &format!("{} = {}\n", d.ini, d.default);
@@ -173,6 +175,7 @@ pub fn save(cfg: &Config) -> std::io::Result<()> {
         ("record", "ink_fade", tf(cfg.ink_fade)),
         ("capture", "magnifier", tf(cfg.magnifier)),
         ("capture", "detect_elements", tf(cfg.detect_elements)),
+        ("capture", "delay", cfg.capture_delay.to_string()),
     ];
     for i in 0..DEFS.len() {
         let (sect, name) = key_place(i);
@@ -340,6 +343,7 @@ pub fn load() -> Config {
         cursor: b("record.cursor", true),
         magnifier: b("capture.magnifier", true),
         detect_elements: b("capture.detect_elements", false),
+        capture_delay: get("capture.delay", "3").parse::<u32>().unwrap_or(3).clamp(1, 60),
         ink_fade: b("record.ink_fade", true),
     };
     crate::i18n::set(&cfg.language);

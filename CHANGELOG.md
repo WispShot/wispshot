@@ -7,6 +7,9 @@
 - Select several drawings in the editor and move or delete them together: `Ctrl` + click adds or removes one,
   `Ctrl` + drag on empty space selects with a rectangle, `Ctrl+Shift+A` selects them all. Undo takes it back in
   one step.
+- Delayed screenshot: `Ctrl+Shift+F1` (or the tray menu) counts down 3 seconds, then opens the editor, so you
+  can open a menu or tooltip first. Press it again to cancel. The delay (3, 5 or 10 seconds) is under
+  *Settings > Capture*.
 
 ## [0.2.1] - 2026-11-11
 

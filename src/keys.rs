@@ -23,6 +23,7 @@ pub enum Scope {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum K {
     Capture,
+    CaptureDelayed,
     Record,
     PinClipboard,
     Draw,
@@ -83,6 +84,7 @@ const fn d(k: K, scope: Scope, ini: &'static str, default: &'static str) -> Def 
 /// In the order of `K`.
 pub const DEFS: &[Def] = &[
     d(K::Capture, Scope::Global, "capture", "F1"),
+    d(K::CaptureDelayed, Scope::Global, "capture_delayed", "Ctrl+Shift+F1"),
     d(K::Record, Scope::Global, "record", "Shift+F1"),
     d(K::PinClipboard, Scope::Global, "pin_clipboard", "F3"),
     d(K::Draw, Scope::Global, "record_draw", "Shift+F2"),

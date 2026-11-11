@@ -128,6 +128,7 @@ can be changed under *Settings > Shortcuts*.
 | Anywhere | |
 |---|---|
 | `F1` | Take a screenshot |
+| `Ctrl+Shift+F1` | Take a screenshot after a few seconds (again to cancel), for menus and tooltips |
 | `Shift+F1` | Start or stop recording an area |
 | `F3` | Pin the image on the clipboard to the screen |
 | `Shift+F2` (while recording) | Draw on the recording |

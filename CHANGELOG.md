@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- Upload (`Ctrl+U` or the new button in the editor): the capture goes to an image host that needs no account or
+  key, and the link is copied to the clipboard. Clicking the notice opens it. Choose the host under
+  *Settings > Screenshots*: Uguu (deleted after 3 hours; run by Pomf AB in Sweden, which keeps no download logs
+  and forgets the uploader's IP when the file expires) or Litterbox (1 or 3 days). `[upload] host = custom` with
+  a `url` sends it to your own server instead. Nothing is sent until you press Upload, and the first upload asks
+  first. Uses WinHTTP, which is part of Windows.
+
 ## [0.3.0] - 2026-11-11
 
 ### Added

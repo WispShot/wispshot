@@ -77,6 +77,9 @@ times how long it takes until the screen visibly changes. Your numbers will diff
 **Share**
 - Copy to the clipboard, or **copy as a file** to paste straight into Explorer, email or chat apps
 - Save as PNG, JPG, BMP or TIFF, either asking every time or straight into a folder
+- **Upload** (`Ctrl+U`) to a host that needs no account or key and copy the link: [Uguu](https://uguu.se)
+  (deleted after 3 hours, the IP is forgotten with the file) or [Litterbox](https://litterbox.catbox.moe) (1 or 3
+  days), or your own server. Nothing leaves your PC until you press it, and the first time it asks you
 - Pin an image on top of other windows; zoom it, make it see-through, copy it again later
 - **OCR** with the text recognition built into Windows: nothing to download
 - **Searchable history** (off by default): the last captures stay on your PC and you can find one by the text
@@ -156,6 +159,7 @@ can be changed under *Settings > Shortcuts*.
 | `Ctrl+R` | Record the selected area |
 | `Ctrl+L` | Scrolling capture of the selected area |
 | `Ctrl+B` | Blur sensitive info (e-mail, phone, IBAN, card, key) |
+| `Ctrl+U` | Upload and copy the link |
 | `Ctrl+A` | Select the current monitor (again: all monitors) |
 | `R` `E` `A` `L` `U` `P` `M` `T` `N` `X` `B` | Rectangle, ellipse, arrow, line, ruler, pen, highlighter, text, numbered step, pixelate, blur |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo |

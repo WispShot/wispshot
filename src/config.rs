@@ -61,6 +61,13 @@ pub struct Config {
     pub history_days: u32,
     /// Read the text in history images (for searching).
     pub history_ocr: bool,
+    /// Where the Upload button sends a capture.
+    pub upload_host: crate::upload::Host,
+    /// `custom` host: the address to POST to and the form field for the file.
+    pub upload_url: String,
+    pub upload_field: String,
+    /// The user has agreed once that uploads are public.
+    pub upload_asked: bool,
     /// Drawings on a recording fade out after a few seconds (steps stay).
     pub ink_fade: bool,
 }
@@ -130,6 +137,11 @@ fn default_ini() -> String {
         t("ini.history_limit"),
         t("ini.history_days"),
         t("ini.history_ocr")
+    );
+    s += &format!(
+        "\n[upload]\n; {}\nhost = uguu\n; {}\nurl =\nfield = file\nasked = false\n",
+        t("ini.upload_host"),
+        t("ini.upload_custom")
     );
     s += &format!("\n[keys]\n; {}\n", t("ini.keys"));
     for d in DEFS.iter().filter(|d| d.scope != Scope::Global) {
@@ -219,6 +231,10 @@ pub fn save(cfg: &Config) -> std::io::Result<()> {
         ("history", "max_mb", cfg.history_mb.to_string()),
         ("history", "max_days", cfg.history_days.to_string()),
         ("history", "ocr", tf(cfg.history_ocr)),
+        ("upload", "host", cfg.upload_host.ini().to_string()),
+        ("upload", "url", cfg.upload_url.clone()),
+        ("upload", "field", cfg.upload_field.clone()),
+        ("upload", "asked", tf(cfg.upload_asked)),
     ];
     for i in 0..DEFS.len() {
         let (sect, name) = key_place(i);
@@ -404,6 +420,10 @@ pub fn load() -> Config {
         history_mb: get("history.max_mb", "500").parse::<u32>().unwrap_or(500).max(1),
         history_days: get("history.max_days", "0").parse::<u32>().unwrap_or(0).min(3650),
         history_ocr: b("history.ocr", true),
+        upload_host: crate::upload::Host::parse(&get("upload.host", "uguu")),
+        upload_url: get("upload.url", "").trim().to_string(),
+        upload_field: get("upload.field", "file").trim().to_string(),
+        upload_asked: b("upload.asked", false),
         ink_fade: b("record.ink_fade", true),
     };
     crate::i18n::set(&cfg.language);

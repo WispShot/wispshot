@@ -37,6 +37,7 @@ pub enum Action {
     Ocr,
     Record,
     Scroll,
+    Upload,
     CopyColor,
 }
 
@@ -75,6 +76,7 @@ enum Btn {
     Ocr,
     Record,
     Scroll,
+    Upload,
     Save,
     CopyFile,
     Copy,
@@ -113,6 +115,7 @@ impl Btn {
             Btn::Redact => k(t("editor.redact"), K::Redact),
             Btn::Record => k(t("editor.record"), K::RecordArea),
             Btn::Scroll => k(t("editor.scroll"), K::ScrollCapture),
+            Btn::Upload => k(t("editor.upload"), K::Upload),
             Btn::Save => k(t("editor.save"), K::Save),
             Btn::CopyFile => k(t("editor.copy_file"), K::CopyFile),
             Btn::Copy => tf("editor.copy_tip", &[&keys::label(K::Copy)]),
@@ -606,6 +609,7 @@ impl Ov {
             Some(Btn::Ocr),
             Some(Btn::Record),
             Some(Btn::Scroll),
+            Some(Btn::Upload),
             Some(Btn::Save),
             Some(Btn::CopyFile),
             None,
@@ -1094,6 +1098,7 @@ impl Ov {
                     Btn::Redo => icon("\u{E7A6}", r, if self.redo.is_empty() { &dis } else { &fg }),
                     Btn::Pin => icon("\u{E718}", r, &fg),
                     Btn::Redact => icon("\u{EA18}", r, &fg),
+                    Btn::Upload => icon("\u{E898}", r, &fg),
                     Btn::Ocr => {
                         if let Ok(f) = self.g.text_format(9.5 * s, true) {
                             let _ = f.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
@@ -1587,6 +1592,7 @@ impl Ov {
             Btn::Redact => self.redact(),
             Btn::Record => self.finish(Action::Record),
             Btn::Scroll => self.finish(Action::Scroll),
+            Btn::Upload => self.finish(Action::Upload),
             Btn::Save => self.finish(Action::Save),
             Btn::CopyFile => self.finish(Action::CopyFile),
             Btn::Copy => self.finish(Action::Copy),
@@ -2101,6 +2107,7 @@ impl Ov {
             }
             K::RecordArea => self.finish(Action::Record),
             K::ScrollCapture => self.finish(Action::Scroll),
+            K::Upload => self.finish(Action::Upload),
             K::Undo => self.undo(),
             K::Redo => self.redo(),
             K::SelectDrawings => {

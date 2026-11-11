@@ -37,6 +37,7 @@ mod session;
 mod settings;
 mod textedit;
 mod traymenu;
+mod upload;
 mod veil;
 
 use config::Config;
@@ -903,7 +904,14 @@ unsafe extern "system" fn app_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                 WM_CONTEXTMENU => tray_menu(),
                 NIN_BALLOONUSERCLICK => {
                     if let Some(Some(p)) = with(|s| s.last_file.clone()) {
-                        open_path(&p, true);
+                        let s = p.to_string_lossy();
+                        if s.starts_with("https://") || s.starts_with("http://") {
+                            // an uploaded capture: open its link
+                            let u = output::wide(&s);
+                            ShellExecuteW(None, w!("open"), PCWSTR(u.as_ptr()), None, None, SW_SHOWNORMAL);
+                        } else {
+                            open_path(&p, true);
+                        }
                     }
                 }
                 _ => {}

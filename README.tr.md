@@ -78,6 +78,9 @@ pek değişmez.
 **Paylaşma**
 - Panoya kopyalama ya da **dosya olarak kopyalama**: doğrudan Explorer'a, e-postaya, sohbet uygulamalarına yapıştırılır
 - PNG, JPG, BMP veya TIFF olarak kaydetme; her seferinde sorarak ya da doğrudan bir klasöre
+- **Yükleme** (`Ctrl+U`): hesap ya da anahtar istemeyen bir servise yükler ve linki kopyalar:
+  [Uguu](https://uguu.se) (3 saat sonra silinir, IP adresi dosyayla birlikte unutulur), [Litterbox](https://litterbox.catbox.moe)
+  (1 ya da 3 gün) veya kendi sunucunuz. Siz basmadıkça bilgisayardan hiçbir şey çıkmaz; ilk seferde size sorar
 - Resmi diğer pencerelerin üstüne sabitleme; yakınlaştırma, saydamlaştırma, sonra yeniden kopyalama
 - Windows'un kendi metin tanıma motoruyla **OCR**: indirilecek bir şey yok
 - **Aranabilir geçmiş** (varsayılan kapalı): son çekimler bilgisayarınızda kalır, içindeki yazıyla bulunur;
@@ -157,6 +160,7 @@ Bunlar varsayılanlardır. Sabit tuşlar (`Esc`, `Enter`, oklar, `Delete` ve met
 | `Ctrl+R` | Seçili bölgeyi kaydet (video) |
 | `Ctrl+L` | Seçili bölgeyi kaydırarak çek |
 | `Ctrl+B` | Hassas bilgileri bulanıklaştır (e-posta, telefon, IBAN, kart, anahtar) |
+| `Ctrl+U` | Yükle ve linki kopyala |
 | `Ctrl+A` | İmlecin olduğu monitörü seç (tekrar: tüm monitörler) |
 | `R` `E` `A` `L` `U` `P` `M` `T` `N` `X` `B` | Dikdörtgen, elips, ok, çizgi, cetvel, kalem, fosforlu, metin, numaralı adım, mozaik, bulanıklık |
 | `Ctrl+Z` / `Ctrl+Y` | Geri al / yinele |

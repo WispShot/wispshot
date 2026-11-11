@@ -24,6 +24,8 @@ struct Sess {
     indexing: u32,
     /// A modal save dialog is open: its message loop also dispatches our exit checks.
     dialog: bool,
+    /// Uploads still on their way.
+    uploading: u32,
 }
 
 thread_local! {
@@ -73,6 +75,7 @@ pub fn run(kind: &str, veil: Option<HWND>, extra: &[String]) {
                 ocr_pending: false,
                 indexing: 0,
                 dialog: false,
+                uploading: 0,
             })
         });
 
@@ -179,7 +182,8 @@ fn has_windows() -> bool {
 }
 
 fn maybe_exit() {
-    let busy = with(|s| s.rec.is_some() || s.ocr_pending || s.dialog || s.indexing > 0).unwrap_or(false);
+    let busy =
+        with(|s| s.rec.is_some() || s.ocr_pending || s.dialog || s.indexing > 0 || s.uploading > 0).unwrap_or(false);
     if !busy && !overlay::is_open() && !has_windows() {
         unsafe { PostQuitMessage(0) };
     }
@@ -202,7 +206,10 @@ fn handle_done() {
     let Some(cfg) = with(|s| s.cfg.clone()) else { return };
     use overlay::Action;
     if !done.from_pin
-        && matches!(done.action, Action::Copy | Action::CopyFile | Action::Save | Action::Pin | Action::Ocr)
+        && matches!(
+            done.action,
+            Action::Copy | Action::CopyFile | Action::Save | Action::Pin | Action::Ocr | Action::Upload
+        )
     {
         if let Some(img) = &done.img {
             keep(img, &cfg);
@@ -274,6 +281,11 @@ fn handle_done() {
                 }
             }
         }
+        Action::Upload => {
+            if let Some(img) = done.img.as_ref().map(framed) {
+                upload(app, &img, &cfg);
+            }
+        }
         Action::Record => start_recording(done.rect, &cfg),
         Action::Scroll => {
             let ok = crate::scroll::start(
@@ -307,6 +319,64 @@ fn handle_done() {
             }
         }
     }
+}
+
+/// Send the capture to the chosen host on a worker thread; the link goes to the
+/// clipboard. The first time, the user is told that the link is public.
+fn upload(app: HWND, img: &crate::img::Img, cfg: &Config) {
+    use crate::upload::Host;
+    let host = cfg.upload_host;
+    if host == Host::Custom && cfg.upload_url.is_empty() {
+        notify(t("upload.failed"), t("upload.no_url"));
+        return;
+    }
+    let site = host.site(&cfg.upload_url);
+    if !cfg.upload_asked {
+        let keep = if host.hours() > 0 { tf("upload.keep_hours", &[&host.hours().to_string()]) } else { String::new() };
+        let body = output::wide(&tf("upload.confirm", &[&site, &keep]));
+        let title = output::wide(t("upload.confirm_title"));
+        with(|s| s.dialog = true);
+        let r = unsafe {
+            windows::Win32::UI::WindowsAndMessaging::MessageBoxW(
+                None,
+                PCWSTR(body.as_ptr()),
+                PCWSTR(title.as_ptr()),
+                windows::Win32::UI::WindowsAndMessaging::MB_YESNO
+                    | windows::Win32::UI::WindowsAndMessaging::MB_ICONINFORMATION
+                    | windows::Win32::UI::WindowsAndMessaging::MB_TOPMOST
+                    | windows::Win32::UI::WindowsAndMessaging::MB_SETFOREGROUND,
+            )
+        };
+        with(|s| s.dialog = false);
+        if r != windows::Win32::UI::WindowsAndMessaging::IDYES {
+            return;
+        }
+        // remember it in the ini as it is now (the settings may have changed meanwhile)
+        let mut now = config::load();
+        now.upload_asked = true;
+        let _ = config::save(&now);
+        with(|s| s.cfg.upload_asked = true);
+    }
+    let Ok(png) = output::encode(img, output::Fmt::Png) else {
+        notify(t("upload.failed"), t("err.temp_file"));
+        return;
+    };
+    notify(t("upload.sending"), &site);
+    with(|s| s.uploading += 1);
+    let (url, field) = (cfg.upload_url.clone(), cfg.upload_field.clone());
+    let target = app.0 as isize;
+    let name = output::timestamp_name("WispShot", "png");
+    std::thread::spawn(move || {
+        let r = crate::upload::upload(host, &url, &field, &png, &name);
+        let p = Box::into_raw(Box::new((host, r)));
+        unsafe {
+            if PostMessageW(Some(HWND(target as *mut _)), crate::upload::WM_APP_UPLOADED, WPARAM(0), LPARAM(p as isize))
+                .is_err()
+            {
+                drop(Box::from_raw(p));
+            }
+        }
+    });
 }
 
 /// Raw hand-off file: i32 w, i32 h, then BGRA pixels. Deleted by the receiver.
@@ -481,6 +551,25 @@ unsafe extern "system" fn proc_(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) ->
             LRESULT(0)
         }
         WM_APP_MAYBE_EXIT => {
+            maybe_exit();
+            LRESULT(0)
+        }
+        crate::upload::WM_APP_UPLOADED => {
+            let (host, r) = *Box::from_raw(lp.0 as *mut (crate::upload::Host, std::result::Result<String, String>));
+            with(|s| s.uploading = s.uploading.saturating_sub(1));
+            match r {
+                Ok(link) => {
+                    output::copy_text(hwnd, &link);
+                    ipc_send(IPC_LAST_FILE, &link);
+                    let body = if host.hours() > 0 {
+                        tf("upload.done_body", &[&link, &host.hours().to_string()])
+                    } else {
+                        link.clone()
+                    };
+                    notify(t("upload.done"), &body);
+                }
+                Err(e) => notify(t("upload.failed"), &tf("upload.failed_body", &[&e])),
+            }
             maybe_exit();
             LRESULT(0)
         }

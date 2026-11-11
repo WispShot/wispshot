@@ -52,6 +52,7 @@ enum Sg {
     ImageFmt,
     VideoFmt,
     Frame,
+    Upload,
     Language,
     Theme,
 }
@@ -429,6 +430,7 @@ impl St {
             Sg::ImageFmt => output::Fmt::ALL.iter().position(|f| *f == self.cfg.image_format),
             Sg::VideoFmt => Some(self.cfg.gif as usize),
             Sg::Frame => crate::frame::Style::ALL.iter().position(|f| *f == self.cfg.frame),
+            Sg::Upload => crate::upload::Host::SHOWN.iter().position(|h| *h == self.cfg.upload_host),
             Sg::Language => {
                 if self.cfg.language.eq_ignore_ascii_case("system") {
                     Some(0)
@@ -600,6 +602,11 @@ impl St {
                 let opts = [t("frame.s_off"), t("frame.s_color"), t("frame.s_light"), t("frame.s_dark")];
                 card(self, &mut y, t("shots.frame"), sub, 330.0, &mut body, &mut |st, r, h| {
                     st.seg(rt, r, Sg::Frame, &opts, h)
+                });
+                let sub = tf("shots.upload_sub", &[&keys::display(self.cfg.key(K::Upload))]);
+                let hosts = [t("upload.s_uguu"), t("upload.s_litter24"), t("upload.s_litter72")];
+                card(self, &mut y, t("shots.upload"), &sub, 400.0, &mut body, &mut |st, r, h| {
+                    st.seg(rt, r, Sg::Upload, &hosts, h)
                 });
             }
             2 => {
@@ -994,6 +1001,7 @@ impl St {
                     Sg::ImageFmt => self.cfg.image_format = output::Fmt::ALL[i],
                     Sg::VideoFmt => self.cfg.gif = i == 1,
                     Sg::Frame => self.cfg.frame = crate::frame::Style::ALL[i],
+                    Sg::Upload => self.cfg.upload_host = crate::upload::Host::SHOWN[i],
                     Sg::Language => {
                         self.cfg.language = if i == 0 { "system".into() } else { i18n::LANGS[i - 1].0.into() };
                         i18n::set(&self.cfg.language);

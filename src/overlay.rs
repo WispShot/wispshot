@@ -237,6 +237,8 @@ const TIMER_SIZE_HINT: usize = 21;
 const TIMER_NOTE: usize = 22;
 /// Worker -> editor: boxes to blur (Box<Option<Vec<[f32; 4]>>> in LPARAM, None = OCR failed).
 const WM_APP_REDACT: u32 = WM_APP + 12;
+/// What the redaction worker sends back: the selection it searched and the boxes it found.
+type RedactMsg = (RECT, Option<Vec<[f32; 4]>>);
 
 impl Drop for Ov {
     fn drop(&mut self) {
@@ -1484,7 +1486,7 @@ impl Ov {
                     .map(|b| [b[0] + ox - 3.0, b[1] + oy - 3.0, b[2] + ox + 3.0, b[3] + oy + 3.0])
                     .collect::<Vec<_>>()
             });
-            let p = Box::into_raw(Box::new(r));
+            let p = Box::into_raw(Box::new((sel, r)));
             unsafe {
                 if PostMessageW(Some(HWND(hwnd as *mut _)), WM_APP_REDACT, WPARAM(0), LPARAM(p as isize)).is_err() {
                     drop(Box::from_raw(p));
@@ -1493,7 +1495,7 @@ impl Ov {
         });
     }
 
-    fn redact_done(&mut self, found: Option<Vec<[f32; 4]>>) {
+    fn redact_done(&mut self, sel: RECT, found: Option<Vec<[f32; 4]>>) {
         self.redacting = false;
         let Some(found) = found else {
             self.set_note(t("redact.no_ocr"), 3000);
@@ -1503,8 +1505,8 @@ impl Ov {
             self.set_note(t("redact.none"), 2500);
             return;
         }
-        let Some(fx) = self.effect_of(1) else { return };
-        let sel = self.sel.unwrap_or(RECT { left: 0, top: 0, right: self.shot.img.w, bottom: self.shot.img.h });
+        // the boxes belong to the selection that was searched, even if it has moved since
+        let fx = self.effect_in(1, sel);
         let base = self.items.len();
         let ops = found
             .iter()
@@ -1541,9 +1543,13 @@ impl Ov {
     /// 0: mosaic, 1: blur.
     fn effect_of(&mut self, i: usize) -> Option<Rc<Effect>> {
         let sel = self.sel?;
+        Some(self.effect_in(i, sel))
+    }
+
+    fn effect_in(&mut self, i: usize, sel: RECT) -> Rc<Effect> {
         if let Some(f) = &self.fx[i] {
             if f.x <= sel.left && f.y <= sel.top && f.x + f.img.w >= sel.right && f.y + f.img.h >= sel.bottom {
-                return Some(f.clone());
+                return f.clone();
             }
         }
         let mut p = self.shot.img.crop(sel.left, sel.top, sel.right - sel.left, sel.bottom - sel.top);
@@ -1555,7 +1561,7 @@ impl Ov {
         }
         let f = Rc::new(Effect { x: sel.left, y: sel.top, img: p, cache: RefCell::new(None) });
         self.fx[i] = Some(f.clone());
-        Some(f)
+        f
     }
 
     fn set_tool(&mut self, t: Tool) {
@@ -2262,6 +2268,9 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
     }
     let ov = &mut *p;
     if ov.closing && msg != WM_CLOSE && msg != WM_NCDESTROY && msg != WM_DESTROY {
+        if msg == WM_APP_REDACT {
+            drop(Box::from_raw(lp.0 as *mut RedactMsg));
+        }
         return DefWindowProcW(hwnd, msg, wp, lp);
     }
     // Any real input before Direct2D is up: finish initialisation first (input is never lost).
@@ -2307,8 +2316,8 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             LRESULT(0)
         }
         WM_APP_REDACT => {
-            let r = *Box::from_raw(lp.0 as *mut Option<Vec<[f32; 4]>>);
-            ov.redact_done(r);
+            let (sel, r) = *Box::from_raw(lp.0 as *mut RedactMsg);
+            ov.redact_done(sel, r);
             redraw(ov);
             LRESULT(0)
         }

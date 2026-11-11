@@ -27,8 +27,10 @@ pub fn find(lines: &[Vec<Word>]) -> Vec<[f32; 4]> {
                 hits.push((a, b));
             }
         }
-        hits.extend(numbers(&s));
-        hits.extend(ibans(&s));
+        let ib = ibans(&s);
+        // digits inside an IBAN are not a phone number of their own
+        hits.extend(numbers(&s).into_iter().filter(|&(a, b)| !ib.iter().any(|&(x, y)| x < b && a < y)));
+        hits.extend(ib);
         for (a, b) in hits {
             // union of the words the match touches
             let mut r: Option<[f32; 4]> = None;
@@ -77,45 +79,80 @@ fn is_token(w: &str) -> bool {
     if w.len() < 24 {
         return false;
     }
-    let letters = w.chars().filter(|c| c.is_ascii_alphabetic()).count();
+    // a file name (report_2026_Final.docx) is not a secret
+    if w.rsplit_once('.').is_some_and(|(_, ext)| (1..=5).contains(&ext.len()) && ext.chars().all(|c| c.is_ascii_alphabetic())) {
+        return false;
+    }
     let digits = w.chars().filter(|c| c.is_ascii_digit()).count();
     let upper = w.chars().filter(|c| c.is_ascii_uppercase()).count();
     let lower = w.chars().filter(|c| c.is_ascii_lowercase()).count();
-    // mixed digits and letters of both cases: not a word, not a plain number
-    digits >= 3 && letters >= 6 && (upper >= 2 && lower >= 2 || digits >= 6)
+    // random text keeps switching between upper case, lower case and digits; names and
+    // paths (Projects2026, screenshot_20261111) switch only now and then
+    let class = |c: char| if c.is_ascii_digit() { 0 } else if c.is_ascii_uppercase() { 1 } else { 2 };
+    let al: Vec<char> = w.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    let switches = al.windows(2).filter(|p| class(p[0]) != class(p[1])).count();
+    digits >= 3 && upper >= 2 && lower >= 2 && switches * 5 >= al.len() * 2
 }
 
 /// Digit runs across words (with spaces, dashes, dots, parentheses): cards, IDs, phones.
+/// When a whole run is not one, its words are tried on their own, so a number
+/// next to another one ("TC: 10000000146 1500 TL") is still found.
 fn numbers(s: &[char]) -> Vec<(usize, usize)> {
     let mut out = vec![];
     let mut i = 0;
     while i < s.len() {
-        if !(s[i].is_ascii_digit() || s[i] == '+' && s.get(i + 1).is_some_and(|c| c.is_ascii_digit())) {
+        let next_digit = s.get(i + 1).is_some_and(|c| c.is_ascii_digit());
+        if !(s[i].is_ascii_digit() || matches!(s[i], '+' | '(') && next_digit) {
             i += 1;
             continue;
         }
         let start = i;
         let mut j = i;
         let mut last_digit = i;
-        while j < s.len() && (s[j].is_ascii_digit() || matches!(s[j], ' ' | '-' | '.' | '(' | ')' | '+' | '/')) {
+        while j < s.len() && (s[j].is_ascii_digit() || matches!(s[j], ' ' | '-' | '.' | '(' | ')' | '+')) {
             if s[j].is_ascii_digit() {
                 last_digit = j;
             }
             j += 1;
         }
         let end = last_digit + 1;
-        let run: String = s[start..end].iter().collect();
-        let digits: Vec<u8> = run.bytes().filter(|b| b.is_ascii_digit()).map(|b| b - b'0').collect();
-        if luhn_card(&digits) || tc_kimlik(&digits) || phone(&run, &digits) {
+        // the run's words (space separated), tried one by one when the whole run is no number
+        if is_number(&s[start..end]) {
             out.push((start, end));
+        } else {
+            let mut a = start;
+            for word in s[start..end].split(|&c| c == ' ') {
+                let b = a + word.len();
+                if b - a < end - start && is_number(word) {
+                    out.push((a, b));
+                }
+                a = b + 1;
+            }
         }
         i = end.max(i + 1);
     }
     out
 }
 
-fn luhn_card(d: &[u8]) -> bool {
+fn is_number(run: &[char]) -> bool {
+    let run: String = run.iter().collect();
+    let digits: Vec<u8> = run.bytes().filter(|b| b.is_ascii_digit()).map(|b| b - b'0').collect();
+    luhn_card(&run, &digits) || tc_kimlik(&digits) || phone(&run, &digits)
+}
+
+/// Lengths of the digit groups in a run.
+fn groups(run: &str) -> Vec<usize> {
+    run.split(|c: char| !c.is_ascii_digit()).filter(|g| !g.is_empty()).map(|g| g.len()).collect()
+}
+
+fn luhn_card(run: &str, d: &[u8]) -> bool {
     if !(13..=19).contains(&d.len()) {
+        return false;
+    }
+    // written as one block, in fours (4111 1111 1111 1111) or the 4-6-5 of Amex
+    let g = groups(run);
+    let fours = g.len() > 1 && g[..g.len() - 1].iter().all(|&n| n == 4) && g[g.len() - 1] <= 4;
+    if !(g.len() == 1 || fours || g == [4, 6, 5] || g == [4, 6, 4]) {
         return false;
     }
     let sum: u32 = d
@@ -151,14 +188,23 @@ fn phone(run: &str, d: &[u8]) -> bool {
     if !(10..=13).contains(&d.len()) {
         return false;
     }
+    // 0.0000000001 or +1000000000 are amounts, not phone numbers
+    let mut seen = [false; 10];
+    d.iter().for_each(|&x| seen[x as usize] = true);
+    if seen.iter().filter(|&&b| b).count() < 4 || run.starts_with("0.") || run.starts_with("0,") {
+        return false;
+    }
+    // a date in front (01.02.2026 1234)
+    let g = groups(run);
+    if g.len() >= 3 && g[0] <= 2 && g[1] <= 2 && g[2] == 4 {
+        return false;
+    }
     // +country, a leading 0 or an area code in parentheses: written like a phone
     if run.starts_with('+') || run.starts_with('0') || run.starts_with('(') {
         return true;
     }
     // otherwise only the 3-3-4 grouping (555-123-4567); dates and times group differently
-    let groups: Vec<usize> =
-        run.split(|c: char| !c.is_ascii_digit()).filter(|g| !g.is_empty()).map(|g| g.len()).collect();
-    groups == [3, 3, 4]
+    g == [3, 3, 4]
 }
 
 /// IBAN: two letters, two check digits, then up to 30 letters/digits (spaces allowed).
@@ -168,8 +214,8 @@ fn ibans(s: &[char]) -> Vec<(usize, usize)> {
     while i + 4 <= s.len() {
         let starts_word = i == 0 || !s[i - 1].is_alphanumeric();
         if !(starts_word
-            && s[i].is_ascii_uppercase()
-            && s[i + 1].is_ascii_uppercase()
+            && s[i].is_ascii_alphabetic()
+            && s[i + 1].is_ascii_alphabetic()
             && s[i + 2].is_ascii_digit()
             && s[i + 3].is_ascii_digit())
         {
@@ -185,8 +231,12 @@ fn ibans(s: &[char]) -> Vec<(usize, usize)> {
             }
             j += 1;
         }
-        // the longest prefix that passes the checksum
-        let found = (15..=chars.len()).rev().find(|&n| iban_ok(&chars[..n].iter().map(|c| c.0).collect::<Vec<_>>()));
+        // the longest prefix that passes the checksum; account numbers are mostly digits,
+        // which keeps ordinary words that happen to pass mod 97 out
+        let found = (15..=chars.len()).rev().find(|&n| {
+            let c: Vec<char> = chars[..n].iter().map(|c| c.0).collect();
+            c[4..].iter().filter(|c| c.is_ascii_alphabetic()).count() * 3 <= n && iban_ok(&c)
+        });
         match found {
             Some(n) => {
                 let end = chars[n - 1].1 + 1;
@@ -237,6 +287,13 @@ mod tests {
         assert_eq!(hidden(&["AKIAIOSFODNN7EXAMPLE"]).len(), 1);
         assert_eq!(hidden(&["call", "555-123-4567"]).len(), 1);
         assert_eq!(hidden(&["0532", "123", "45", "67"]).len(), 1);
+        assert_eq!(hidden(&["(212)", "456", "78", "90"]).len(), 1);
+        assert_eq!(hidden(&["0532", "111", "22", "33", "/", "0532", "444", "55", "66"]).len(), 2);
+        assert_eq!(hidden(&["tr33", "0006", "1005", "1978", "6457", "8413", "26"]).len(), 1);
+        assert_eq!(hidden(&["TC:", "10000000146", "1500", "TL"]), vec![[10.0, 0.0, 18.0, 10.0]]);
+        assert_eq!(hidden(&["ghp_a1B2c3D4e5F6g7H8i9J0"]).len(), 1);
+        assert_eq!(hidden(&["Xk9mQ2vL7pR4tW8zB3nH6jF1"]).len(), 1);
+        assert_eq!(hidden(&["3782", "822463", "10005"]).len(), 1); // Amex test number
     }
 
     #[test]
@@ -247,5 +304,12 @@ mod tests {
         assert!(hidden(&["12345678901"]).is_empty()); // not a valid kimlik no
         assert!(hidden(&["internationalization", "configuration"]).is_empty());
         assert!(hidden(&["https://example.com/a/very/long/path/that/goes/on"]).is_empty());
+        assert!(hidden(&["screenshot_20261111_190446.png"]).is_empty());
+        assert!(hidden(&["MyReport_2026_Final_Version3.docx"]).is_empty());
+        assert!(hidden(&["a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0"]).is_empty()); // a commit hash
+        assert!(hidden(&["/Users/Efe/Documents/Projects2026"]).is_empty());
+        assert!(hidden(&["0.0000000001"]).is_empty());
+        assert!(hidden(&["+1000000000"]).is_empty());
+        assert!(hidden(&["01.02.2026", "1234"]).is_empty());
     }
 }

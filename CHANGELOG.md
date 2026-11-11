@@ -13,6 +13,10 @@
   a `url` sends it to your own server instead. Nothing is sent until you press Upload, and the first upload asks
   first, while the editor is still open (No takes you back to it). Uses WinHTTP, which is part of Windows.
 
+### Changed
+
+- Editing `wispshot.ini` by hand applies as soon as you save it; no restart needed.
+
 ## [0.3.0] - 2026-11-11
 
 ### Added

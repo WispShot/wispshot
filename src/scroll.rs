@@ -182,6 +182,14 @@ fn exclude(h: HWND) {
     }
 }
 
+/// The frame colour, made once per process (the window class keeps using it).
+fn frame_brush() -> HBRUSH {
+    thread_local! {
+        static BR: HBRUSH = unsafe { CreateSolidBrush(COLORREF(0x00FF_8C2B)) };
+    }
+    BR.with(|b| *b)
+}
+
 /// Start scrolling capture of `r` (screen pixels). `on_done` gets the stitched image,
 /// or None when cancelled.
 pub fn start(r: RECT, on_done: Box<dyn Fn(Option<Img>)>) -> bool {
@@ -192,7 +200,7 @@ pub fn start(r: RECT, on_done: Box<dyn Fn(Option<Img>)>) -> bool {
             lpfnWndProc: Some(frame_proc),
             hInstance: inst.into(),
             lpszClassName: w!("WispScrollFrame"),
-            hbrBackground: CreateSolidBrush(COLORREF(0x00FF_8C2B)),
+            hbrBackground: frame_brush(),
             ..Default::default()
         };
         RegisterClassExW(&frame_wc);

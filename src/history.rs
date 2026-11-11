@@ -424,7 +424,16 @@ impl Hs {
             let conv = f.CreateFormatConverter().ok()?;
             conv.Initialize(&sc, &GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, None, 0.0, WICBitmapPaletteTypeCustom)
                 .ok()?;
-            rt.CreateBitmapFromWicBitmap(&conv, None).ok()
+            // the pixels were scaled for this DPI: tell Direct2D, so its size in DIPs is TW x TH
+            let props = D2D1_BITMAP_PROPERTIES {
+                pixelFormat: D2D1_PIXEL_FORMAT {
+                    format: windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM,
+                    alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
+                },
+                dpiX: self.dpi as f32,
+                dpiY: self.dpi as f32,
+            };
+            rt.CreateBitmapFromWicBitmap(&conv, Some(&props)).ok()
         }
     }
 
@@ -846,6 +855,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
                     let _ = DeleteObject(s.edit_bg.into());
                     s.edit_bg = CreateSolidBrush(COLORREF(bgr(s.p.card)));
                     title_bar(s.hwnd, light);
+                    let _ = InvalidateRect(Some(s.edit), None, true);
                 }
             });
             redraw(hwnd);
@@ -854,6 +864,8 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
         WM_DPICHANGED => {
             with(|s| {
                 s.dpi = (wp.0 & 0xFFFF) as u32;
+                // thumbnails belong to the render target: drop them first
+                s.items.iter_mut().for_each(|it| it.thumb = None);
                 s.rt = None;
             });
             let r = &*(lp.0 as *const RECT);
@@ -862,7 +874,9 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             LRESULT(0)
         }
         WM_DESTROY => {
-            if let Some(s) = HS.with(|h| h.borrow_mut().take()) {
+            if let Some(mut s) = HS.with(|h| h.borrow_mut().take()) {
+                s.items.clear();
+                s.rt = None;
                 let _ = DeleteObject(s.font.into());
                 let _ = DeleteObject(s.edit_bg.into());
             }

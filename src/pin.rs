@@ -78,7 +78,7 @@ pub fn pin(img: Img, x: i32, y: i32) {
         let _ = GetMonitorInfoW(MonitorFromPoint(POINT { x, y }, MONITOR_DEFAULTTONEAREST), &mut mi);
         let wa = mi.rcWork;
         let (aw, ah) = ((wa.right - wa.left) as f32 * 0.9, (wa.bottom - wa.top) as f32 * 0.9);
-        let zoom = (aw / img.w as f32).min(ah / img.h as f32).clamp(0.1, 1.0);
+        let zoom = (aw / img.w as f32).min(ah / img.h as f32).clamp(0.01, 1.0);
         let (w, h) = (((img.w as f32 * zoom).round() as i32).max(8), ((img.h as f32 * zoom).round() as i32).max(8));
         let x = x.min(wa.right - w).max(wa.left);
         let y = y.min(wa.bottom - h).max(wa.top);
@@ -113,7 +113,7 @@ pub fn pin(img: Img, x: i32, y: i32) {
 }
 
 fn apply_zoom(hwnd: HWND, p: &mut Pin, z: f32, anchor: Option<POINT>) {
-    let z = z.clamp(0.1, 8.0);
+    let z = z.clamp(0.01, 8.0);
     unsafe {
         let mut r = RECT::default();
         let _ = GetWindowRect(hwnd, &mut r);

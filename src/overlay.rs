@@ -1228,6 +1228,13 @@ impl Ov {
     }
 
     // ---------------------------------------------------------------- input
+    /// The first upload asks before anything leaves the PC; "No" stays in the editor.
+    fn upload(&mut self) {
+        if self.sel.or(self.hover).is_some() && crate::session::confirm_upload(self.hwnd) {
+            self.finish(Action::Upload);
+        }
+    }
+
     fn finish(&mut self, action: Action) {
         let mut done =
             Done { action, img: None, rect: RECT::default(), text: String::new(), frame: self.frame, from_pin: false };
@@ -1592,7 +1599,7 @@ impl Ov {
             Btn::Redact => self.redact(),
             Btn::Record => self.finish(Action::Record),
             Btn::Scroll => self.finish(Action::Scroll),
-            Btn::Upload => self.finish(Action::Upload),
+            Btn::Upload => self.upload(),
             Btn::Save => self.finish(Action::Save),
             Btn::CopyFile => self.finish(Action::CopyFile),
             Btn::Copy => self.finish(Action::Copy),
@@ -2107,7 +2114,7 @@ impl Ov {
             }
             K::RecordArea => self.finish(Action::Record),
             K::ScrollCapture => self.finish(Action::Scroll),
-            K::Upload => self.finish(Action::Upload),
+            K::Upload => self.upload(),
             K::Undo => self.undo(),
             K::Redo => self.redo(),
             K::SelectDrawings => {

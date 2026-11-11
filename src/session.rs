@@ -323,6 +323,38 @@ fn handle_done() {
 
 /// Send the capture to the chosen host on a worker thread; the link goes to the
 /// clipboard. The first time, the user is told that the link is public.
+/// Asked by the editor before the first upload, while it is still open, so "No" keeps
+/// the capture and its edits. True when the upload may go ahead.
+pub fn confirm_upload(owner: HWND) -> bool {
+    use crate::upload::Host;
+    use windows::Win32::UI::WindowsAndMessaging::*;
+    let mut now = config::load();
+    if now.upload_asked || (now.upload_host == Host::Custom && now.upload_url.is_empty()) {
+        return true;
+    }
+    let host = now.upload_host;
+    let keep = if host.hours() > 0 { tf("upload.keep_hours", &[&host.hours().to_string()]) } else { String::new() };
+    let body = output::wide(&tf("upload.confirm", &[&host.site(&now.upload_url), &keep]));
+    let title = output::wide(t("upload.confirm_title"));
+    with(|s| s.dialog = true);
+    let r = unsafe {
+        MessageBoxW(
+            Some(owner),
+            PCWSTR(body.as_ptr()),
+            PCWSTR(title.as_ptr()),
+            MB_YESNO | MB_ICONINFORMATION | MB_TOPMOST | MB_SETFOREGROUND,
+        )
+    };
+    with(|s| s.dialog = false);
+    if r != IDYES {
+        return false;
+    }
+    now.upload_asked = true;
+    let _ = config::save(&now);
+    with(|s| s.cfg.upload_asked = true);
+    true
+}
+
 fn upload(app: HWND, img: &crate::img::Img, cfg: &Config) {
     use crate::upload::Host;
     let host = cfg.upload_host;
@@ -331,32 +363,6 @@ fn upload(app: HWND, img: &crate::img::Img, cfg: &Config) {
         return;
     }
     let site = host.site(&cfg.upload_url);
-    if !cfg.upload_asked {
-        let keep = if host.hours() > 0 { tf("upload.keep_hours", &[&host.hours().to_string()]) } else { String::new() };
-        let body = output::wide(&tf("upload.confirm", &[&site, &keep]));
-        let title = output::wide(t("upload.confirm_title"));
-        with(|s| s.dialog = true);
-        let r = unsafe {
-            windows::Win32::UI::WindowsAndMessaging::MessageBoxW(
-                None,
-                PCWSTR(body.as_ptr()),
-                PCWSTR(title.as_ptr()),
-                windows::Win32::UI::WindowsAndMessaging::MB_YESNO
-                    | windows::Win32::UI::WindowsAndMessaging::MB_ICONINFORMATION
-                    | windows::Win32::UI::WindowsAndMessaging::MB_TOPMOST
-                    | windows::Win32::UI::WindowsAndMessaging::MB_SETFOREGROUND,
-            )
-        };
-        with(|s| s.dialog = false);
-        if r != windows::Win32::UI::WindowsAndMessaging::IDYES {
-            return;
-        }
-        // remember it in the ini as it is now (the settings may have changed meanwhile)
-        let mut now = config::load();
-        now.upload_asked = true;
-        let _ = config::save(&now);
-        with(|s| s.cfg.upload_asked = true);
-    }
     let Ok(png) = output::encode(img, output::Fmt::Png) else {
         notify(t("upload.failed"), t("err.temp_file"));
         return;

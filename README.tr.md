@@ -81,7 +81,7 @@ pek değişmez.
 - Resmi diğer pencerelerin üstüne sabitleme; yakınlaştırma, saydamlaştırma, sonra yeniden kopyalama
 - Windows'un kendi metin tanıma motoruyla **OCR**: indirilecek bir şey yok
 - **Aranabilir geçmiş** (varsayılan kapalı): son çekimler bilgisayarınızda kalır, içindeki yazıyla bulunur;
-  örneğin içinde "fatura" geçen tüm ekran görüntüleri
+  örneğin içinde "fatura" geçen tüm ekran görüntüleri. Eskiler bir gün, bir hafta ya da bir ay sonra silinebilir
 
 **Kayıt**
 - Herhangi bir bölgeyi ekran kartının kendi kodlayıcısıyla MP4'e (H.264) kaydetme
@@ -293,9 +293,17 @@ Kaynak düzeni için [İngilizce README](README.md#building-from-source)'ye bak�
 
 ## WispShot'a destek olun
 
-WispShot ücretsizdir ve öyle kalacak: reklam, hesap veya telemetri yok. İşinize yarıyorsa geliştirilmesine
-[GitHub Sponsors](https://github.com/sponsors/efekaputlu) üzerinden destek olabilirsiniz. Bir yıldız da yardımcı olur;
-projeyi başkalarının bulmasını kolaylaştırır.
+<a href="https://github.com/sponsors/efekaputlu"><img src="docs/media/sponsor.tr.svg" alt="WispShot ücretsiz. Öyle kalsın. GitHub'da sponsor ol" width="720"></a>
+
+WispShot ücretsizdir ve öyle kalacak: reklam, hesap veya telemetri yok. Boş zamanlarda, tek küçük bir exe olarak
+geliştiriliyor. İşinize yarıyorsa [GitHub Sponsors](https://github.com/sponsors/efekaputlu) üzerinden verdiğiniz destek
+bir sonraki özelliği, düzeltmeyi ve sürümü mümkün kılar; ayda 3 dolardan ya da tek seferlik 5 dolardan başlar.
+
+Ayıracak paranız yoksa sorun değil:
+
+- Depoya yıldız verin. WispShot'ı başkalarının bulmasına yardım eder.
+- Gün boyu ekran görüntüsü alan bir arkadaşınıza anlatın.
+- [Hata bildirin ya da fikir önerin](https://github.com/WispShot/wispshot/issues).
 
 ## Yıldız geçmişi
 

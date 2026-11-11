@@ -80,7 +80,7 @@ times how long it takes until the screen visibly changes. Your numbers will diff
 - Pin an image on top of other windows; zoom it, make it see-through, copy it again later
 - **OCR** with the text recognition built into Windows: nothing to download
 - **Searchable history** (off by default): the last captures stay on your PC and you can find one by the text
-  in it, for example every screenshot that says "invoice"
+  in it, for example every screenshot that says "invoice". Old ones can be deleted after a day, a week or a month
 
 **Record**
 - Record any area to MP4 (H.264) with the GPU's own encoder (Intel Quick Sync, NVIDIA NVENC, AMD AMF),
@@ -311,9 +311,17 @@ To add a language, copy `lang/en.txt`, translate the values and add it to `LANGS
 
 ## Support WispShot
 
-WispShot is free and stays free, with no ads, accounts or telemetry. If it saves you time, you can support its
-development through [GitHub Sponsors](https://github.com/sponsors/efekaputlu). A star helps too: it makes the project
-easier for others to find.
+<a href="https://github.com/sponsors/efekaputlu"><img src="docs/media/sponsor.svg" alt="WispShot is free. Help keep it that way. Sponsor on GitHub" width="720"></a>
+
+WispShot is free and stays free, with no ads, accounts or telemetry. It is built and kept up in spare time, one small
+exe at a time. If it saves you time, sponsoring through [GitHub Sponsors](https://github.com/sponsors/efekaputlu) pays
+for the next feature, the next fix and the next release, starting from $3 a month or a one-time $5.
+
+No money to spare? That's fine too:
+
+- Give the repository a star. It helps others find WispShot.
+- Tell a friend or a colleague who takes screenshots all day.
+- [Report a bug or suggest an idea](https://github.com/WispShot/wispshot/issues).
 
 ## Star history
 

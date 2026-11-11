@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 168" width="720" height="168" role="img" aria-label="WispShot'a GitHub'da sponsor olun">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="168" x2="720" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0EA5E9"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="168" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="720" height="168" rx="22" fill="url(#bg)"/>
+  <rect width="720" height="84" rx="22" fill="url(#shine)"/>
+  <!-- logodaki iz, büyük ve soluk -->
+  <path d="M470 70C490 160 516 184 542 142 562 106 614 106 634 142 660 184 686 160 706 70" stroke="#fff" stroke-opacity=".14" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <circle cx="588" cy="36" r="13" fill="#fff" fill-opacity=".14"/>
+  <g font-family="Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" fill="#fff">
+    <text x="40" y="66" font-size="30" font-weight="700">WispShot ücretsiz. Öyle kalsın.</text>
+    <text x="40" y="100" font-size="17" fill-opacity=".9">Reklam, hesap, telemetri yok. Gereken zamanı sponsorlar karşılar.</text>
+  </g>
+  <g transform="translate(40 118)">
+    <rect width="212" height="34" rx="17" fill="#fff"/>
+    <path d="M24 26.5l-1.3-1.2C18 21.1 15 18.4 15 15.1 15 12.4 17.1 10.3 19.8 10.3c1.5 0 3 .7 4.2 1.8 1.2-1.1 2.7-1.8 4.2-1.8 2.7 0 4.8 2.1 4.8 4.8 0 3.3-3 6-7.7 10.2z" fill="#DB2777"/>
+    <text x="42" y="23" font-family="Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#4C1D95">GitHub'da sponsor ol</text>
+  </g>
+</svg>

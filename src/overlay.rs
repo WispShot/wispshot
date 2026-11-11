@@ -132,12 +132,19 @@ enum Drag {
         y0: f32,
     },
     /// Ctrl+drag on an existing drawing: (lx, ly) last mouse position, (tx, ty) total offset.
+    /// `group`: it was already picked, so all picked drawings move with it.
     MovingItem {
         idx: usize,
         lx: i32,
         ly: i32,
         tx: i32,
         ty: i32,
+        group: bool,
+    },
+    /// Ctrl+drag on empty space: picks the drawings the rectangle touches.
+    Marquee {
+        x0: i32,
+        y0: i32,
     },
     /// Selecting inside the open text box with the mouse.
     TextSel,
@@ -147,10 +154,24 @@ enum Drag {
 /// inverse (which goes on the other stack). Every step is reversed exactly and in
 /// order, so the indices stored here always point at the right drawing.
 enum Op {
-    Insert { idx: usize, item: Item },
-    Remove { idx: usize },
-    Move { idx: usize, dx: f32, dy: f32 },
-    Replace { idx: usize, item: Item },
+    Insert {
+        idx: usize,
+        item: Item,
+    },
+    Remove {
+        idx: usize,
+    },
+    Move {
+        idx: usize,
+        dx: f32,
+        dy: f32,
+    },
+    Replace {
+        idx: usize,
+        item: Item,
+    },
+    /// Several steps done as one; undone in reverse order.
+    Batch(Vec<Op>),
 }
 
 struct Ov {
@@ -172,8 +193,9 @@ struct Ov {
     items: Vec<Item>,
     undo: Vec<Op>,
     redo: Vec<Op>,
-    /// Drawing chosen with Ctrl+click: Delete removes it, arrows nudge it, F2 edits text.
-    picked: Option<usize>,
+    /// Drawings chosen with Ctrl+click, a Ctrl+drag rectangle or select-all (sorted, no repeats):
+    /// Delete removes them, arrows and Ctrl+drag move them, F2 edits a single text.
+    picked: Vec<usize>,
     /// Text being re-edited: its index (hidden while editing) and the tool to go back to.
     editing: Option<(usize, Tool)>,
     /// Blur / mosaic of the selection, computed on first use (index: 0 mosaic, 1 blur).
@@ -283,7 +305,7 @@ pub fn open(mode: Mode, magnifier: bool, deep: bool, veil: Option<HWND>) -> bool
             items: Vec::new(),
             undo: Vec::new(),
             redo: Vec::new(),
-            picked: None,
+            picked: Vec::new(),
             editing: None,
             fx: [None, None],
             hot: None,
@@ -756,28 +778,55 @@ impl Ov {
             if show_mag {
                 self.draw_magnifier(rt)?;
             }
-            // the drawing Ctrl+drag would move (or is moving)
-            let hot = match self.drag {
-                Drag::MovingItem { idx, .. } => Some(idx),
-                _ => self.hot.or(self.picked),
+            // the drawings Ctrl+drag would move (or is moving)
+            let mut marked = self.picked.clone();
+            match self.drag {
+                Drag::MovingItem { idx, group: false, .. } => marked = vec![idx],
+                Drag::MovingItem { .. } => {}
+                _ => marked.extend(self.hot.filter(|h| !self.picked.contains(h))),
+            }
+            let dark = brush(rt, 0xA000_0000)?;
+            let acc = brush(rt, ACCENT)?;
+            let m = 3.0 * s;
+            // the tip speaks of what a Ctrl+drag here would move: an unpicked drawing under the cursor alone
+            let subject = match self.hot {
+                Some(h) if !self.picked.contains(&h) => vec![h],
+                _ => self.picked.clone(),
             };
-            if let Some(it) = hot.and_then(|i| self.items.get(i)) {
+            let mut all: Option<D2D_RECT_F> = None;
+            for &i in &marked {
+                let Some(it) = self.items.get(i) else { continue };
                 let b = it.bounds(&self.g);
-                let m = 3.0 * s;
                 let r = rc(b.left - m, b.top - m, b.right + m, b.bottom + m);
-                let dark = brush(rt, 0xA000_0000)?;
-                let acc = brush(rt, ACCENT)?;
                 rt.DrawRectangle(&r, &dark, 3.0 * s.max(1.0), None);
                 rt.DrawRectangle(&r, &acc, 1.5 * s.max(1.0), None);
-                if self.drag == Drag::None {
-                    let tip =
-                        if matches!(it, Item::Text { .. }) { t("editor.picked_text") } else { t("editor.picked") };
-                    let below = r.bottom + 6.0 * s;
-                    let y = if below + 30.0 * s > ih { r.top - 30.0 * s } else { below };
-                    self.label(rt, tip, r.left.max(2.0), y, false)?;
+                if subject.contains(&i) {
+                    all = Some(match all {
+                        Some(a) => {
+                            rc(a.left.min(r.left), a.top.min(r.top), a.right.max(r.right), a.bottom.max(r.bottom))
+                        }
+                        None => r,
+                    });
                 }
             }
-            if hot.is_none() {
+            if let (Some(r), Drag::None) = (all, self.drag) {
+                let n = subject.len().to_string();
+                let tip = match subject.as_slice() {
+                    [i] if matches!(self.items.get(*i), Some(Item::Text { .. })) => t("editor.picked_text").to_string(),
+                    [_] => t("editor.picked").to_string(),
+                    _ => tf("editor.picked_many", &[&n]),
+                };
+                let below = r.bottom + 6.0 * s;
+                let y = if below + 30.0 * s > ih { r.top - 30.0 * s } else { below };
+                self.label(rt, &tip, r.left.max(2.0), y, false)?;
+            }
+            if let Drag::Marquee { x0, y0 } = self.drag {
+                let r = norm_rect((x0, y0), self.mouse);
+                let r = rc(r.left as f32 + 0.5, r.top as f32 + 0.5, r.right as f32 + 0.5, r.bottom as f32 + 0.5);
+                rt.FillRectangle(&r, &brush(rt, (ACCENT & 0x00FF_FFFF) | 0x2000_0000)?);
+                rt.DrawRectangle(&r, &acc, s.max(1.0), None);
+            }
+            if marked.is_empty() && !matches!(self.drag, Drag::Marquee { .. }) {
                 self.draw_brush_preview(rt)?;
             }
             self.draw_toolbar(rt)?;
@@ -1197,7 +1246,7 @@ impl Ov {
         self.text = Some(TextEdit::new(*x, *y, s));
         self.editing = Some((idx, self.tool));
         self.tool = Tool::Text;
-        self.picked = None;
+        self.picked.clear();
         self.hot = None;
         self.text_caret_to(px, py, false);
         true
@@ -1265,6 +1314,11 @@ impl Ov {
                 Op::Move { idx, dx: -dx, dy: -dy }
             }
             Op::Replace { idx, item } => Op::Replace { idx, item: std::mem::replace(self.items.get_mut(idx)?, item) },
+            Op::Batch(ops) => {
+                let mut inv: Vec<Op> = ops.into_iter().filter_map(|o| self.apply(o)).collect();
+                inv.reverse();
+                Op::Batch(inv)
+            }
         })
     }
 
@@ -1280,9 +1334,14 @@ impl Ov {
         self.exec(Op::Insert { idx: self.items.len(), item: it });
     }
 
-    fn delete_item(&mut self, idx: usize) {
-        self.exec(Op::Remove { idx });
-        self.picked = None;
+    /// Remove these drawings as one undo step.
+    fn delete_items(&mut self, idx: &[usize]) {
+        let mut v = idx.to_vec();
+        v.sort_unstable();
+        v.dedup();
+        // from the back, so each index is still right when its turn comes
+        self.exec(Op::Batch(v.into_iter().rev().map(|idx| Op::Remove { idx }).collect()));
+        self.picked.clear();
         self.hot = None;
         self.update_hot();
     }
@@ -1295,7 +1354,7 @@ impl Ov {
             }
             return;
         }
-        self.picked = None;
+        self.picked.clear();
         if let Some(inv) = self.undo.pop().and_then(|op| self.apply(op)) {
             self.redo.push(inv);
         }
@@ -1306,7 +1365,7 @@ impl Ov {
             te.redo();
             return;
         }
-        self.picked = None;
+        self.picked.clear();
         if let Some(inv) = self.redo.pop().and_then(|op| self.apply(op)) {
             self.undo.push(inv);
         }
@@ -1328,6 +1387,15 @@ impl Ov {
             .filter(|(_, b)| fx >= b.left && fx <= b.right && fy >= b.top && fy <= b.bottom)
             .min_by(|a, b| area(&a.1).total_cmp(&area(&b.1)))
             .map(|(i, _)| i)
+    }
+
+    /// The drawings a Ctrl+drag on `idx` moves.
+    fn moving(&self, idx: usize, group: bool) -> Vec<usize> {
+        if group {
+            self.picked.clone()
+        } else {
+            vec![idx]
+        }
     }
 
     /// Recompute the Ctrl-hover drawing; true if it changed.
@@ -1365,7 +1433,7 @@ impl Ov {
 
     fn set_tool(&mut self, t: Tool) {
         self.commit_text();
-        self.picked = None;
+        self.picked.clear();
         self.tool = if self.tool == t { Tool::None } else { t };
     }
 
@@ -1410,20 +1478,29 @@ impl Ov {
         if !self.forwarded {
             unsafe { SetCapture(self.hwnd) };
         }
-        self.picked = None;
+        let ctrl = unsafe { GetKeyState(VK_CONTROL.0 as i32) < 0 };
+        if !ctrl {
+            self.picked.clear();
+        }
         if self.text.is_some() && self.in_text_box(x, y) {
             let shift = unsafe { GetKeyState(VK_SHIFT.0 as i32) < 0 };
             self.text_caret_to(x, y, shift);
             self.drag = Drag::TextSel;
             return;
         }
-        // Ctrl + drag on a drawing moves it (any tool); otherwise drawings stay out of the way.
-        if unsafe { GetKeyState(VK_CONTROL.0 as i32) < 0 } && self.sel.is_some() {
+        // Ctrl + drag on a drawing moves it (any tool), together with the other picked ones if it is
+        // picked; a Ctrl + click adds or removes it; Ctrl + drag on empty space picks with a rectangle.
+        // Otherwise drawings stay out of the way.
+        if ctrl && self.sel.is_some() {
             self.commit_text();
             if let Some(idx) = self.item_at(x, y) {
                 self.hot = Some(idx);
-                self.picked = Some(idx);
-                self.drag = Drag::MovingItem { idx, lx: x, ly: y, tx: 0, ty: 0 };
+                let group = self.picked.contains(&idx);
+                self.drag = Drag::MovingItem { idx, lx: x, ly: y, tx: 0, ty: 0, group };
+                return;
+            }
+            if self.inside_sel(x, y) && !self.items.is_empty() {
+                self.drag = Drag::Marquee { x0: x, y0: y };
                 return;
             }
         }
@@ -1490,13 +1567,16 @@ impl Ov {
                 self.update_hover();
                 self.update_hot();
             }
-            Drag::MovingItem { idx, lx, ly, tx, ty } => {
+            Drag::MovingItem { idx, lx, ly, tx, ty, group } => {
                 let (dx, dy) = (x - lx, y - ly);
-                if let Some(it) = self.items.get_mut(idx) {
-                    it.offset(dx as f32, dy as f32);
+                for i in self.moving(idx, group) {
+                    if let Some(it) = self.items.get_mut(i) {
+                        it.offset(dx as f32, dy as f32);
+                    }
                 }
-                self.drag = Drag::MovingItem { idx, lx: x, ly: y, tx: tx + dx, ty: ty + dy };
+                self.drag = Drag::MovingItem { idx, lx: x, ly: y, tx: tx + dx, ty: ty + dy, group };
             }
+            Drag::Marquee { .. } => {}
             Drag::TextSel => self.text_caret_to(x, y, true),
             Drag::Selecting { x0, y0, moved } => {
                 if !moved && ((x - x0).abs() > 3 || (y - y0).abs() > 3) {
@@ -1600,12 +1680,37 @@ impl Ov {
                     }
                 }
             }
-            Drag::MovingItem { idx, tx, ty, .. } => {
+            Drag::MovingItem { idx, tx, ty, group, .. } => {
                 if tx != 0 || ty != 0 {
-                    // already moved live: only record how to move it back
-                    self.undo.push(Op::Move { idx, dx: -tx as f32, dy: -ty as f32 });
+                    // already moved live: only record how to move them back
+                    let (dx, dy) = (-tx as f32, -ty as f32);
+                    let back = self.moving(idx, group).into_iter().map(|idx| Op::Move { idx, dx, dy }).collect();
+                    self.undo.push(Op::Batch(back));
                     self.redo.clear();
+                    if !group {
+                        self.picked = vec![idx];
+                    }
+                } else if let Some(p) = self.picked.iter().position(|&i| i == idx) {
+                    self.picked.remove(p);
+                } else {
+                    let p = self.picked.partition_point(|&i| i < idx);
+                    self.picked.insert(p, idx);
                 }
+                self.update_hot();
+            }
+            Drag::Marquee { x0, y0 } => {
+                let r = norm_rect((x0, y0), (x, y));
+                let (l, t, rr, b) = (r.left as f32, r.top as f32, r.right as f32, r.bottom as f32);
+                self.picked = if rr - l < 3.0 && b - t < 3.0 {
+                    Vec::new() // a Ctrl + click on empty space drops the pick
+                } else {
+                    (0..self.items.len())
+                        .filter(|&i| {
+                            let o = self.items[i].bounds(&self.g);
+                            o.left <= rr && o.right >= l && o.top <= b && o.bottom >= t
+                        })
+                        .collect()
+                };
                 self.update_hot();
             }
             Drag::Drawing { x0, y0 } => match self.tool {
@@ -1651,8 +1756,8 @@ impl Ov {
     fn right_click(&mut self) {
         if self.text.is_some() {
             self.cancel_text();
-        } else if self.picked.is_some() {
-            self.picked = None;
+        } else if !self.picked.is_empty() {
+            self.picked.clear();
         } else if self.tool != Tool::None {
             self.tool = Tool::None;
         } else if self.sel.is_some() && self.items.is_empty() {
@@ -1740,7 +1845,7 @@ impl Ov {
             }
             return true;
         }
-        if let Some(idx) = self.picked {
+        if let Some(&idx) = self.picked.first() {
             let step = if shift { 10.0 } else { 1.0 };
             let mv = match vkk {
                 VK_LEFT => Some((-step, 0.0)),
@@ -1750,10 +1855,10 @@ impl Ov {
                 _ => None,
             };
             if let Some((dx, dy)) = mv {
-                self.exec(Op::Move { idx, dx, dy });
+                self.exec(Op::Batch(self.picked.iter().map(|&idx| Op::Move { idx, dx, dy }).collect()));
                 return true;
             }
-            if keys::pressed(Scope::Editor, vk) == Some(K::EditText) {
+            if self.picked.len() == 1 && keys::pressed(Scope::Editor, vk) == Some(K::EditText) {
                 if let Some(b) =
                     self.items.get(idx).filter(|i| matches!(i, Item::Text { .. })).map(|i| i.bounds(&self.g))
                 {
@@ -1772,11 +1877,12 @@ impl Ov {
             }
         }
         match vkk {
-            VK_DELETE | VK_BACK => match self.picked.or(self.hot) {
-                Some(idx) => self.delete_item(idx),
+            VK_DELETE | VK_BACK if !self.picked.is_empty() => self.delete_items(&self.picked.clone()),
+            VK_DELETE | VK_BACK => match self.hot {
+                Some(idx) => self.delete_items(&[idx]),
                 None => return false,
             },
-            VK_ESCAPE if self.picked.is_some() => self.picked = None,
+            VK_ESCAPE if !self.picked.is_empty() => self.picked.clear(),
             VK_ESCAPE => {
                 if self.tool != Tool::None {
                     self.tool = Tool::None;
@@ -1848,6 +1954,12 @@ impl Ov {
             K::RecordArea => self.finish(Action::Record),
             K::Undo => self.undo(),
             K::Redo => self.redo(),
+            K::SelectDrawings => {
+                if self.text.is_some() || self.sel.is_none() || self.items.is_empty() {
+                    return false;
+                }
+                self.picked = (0..self.items.len()).collect();
+            }
             K::SelectMonitor => {
                 let m = self.monitor_rect(self.mouse.0, self.mouse.1);
                 let full = RECT { left: 0, top: 0, right: self.shot.img.w, bottom: self.shot.img.h };

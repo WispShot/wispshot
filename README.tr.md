@@ -63,7 +63,7 @@ pek değişmez.
 - Dikdörtgen, elips, ok, çizgi, kalem, fosforlu kalem, metin, numaralı adım
 - Bulanıklaştırma ve mozaik: fırça gibi boyayın ya da `Shift` basılıyken dikdörtgen çizin
 - Tekerlekle kalınlık, imleçte anlık önizleme
-- `Ctrl` basılı tutarak herhangi bir çizimi taşıyın ya da silin; metne çift tıklayıp yeniden düzenleyin
+- `Ctrl` basılı tutarak herhangi bir çizimi ya da birkaçını birden taşıyın veya silin; metne çift tıklayıp yeniden düzenleyin
 - Sınırsız geri al ve yinele
 
 **Paylaşma**
@@ -156,9 +156,12 @@ Bunlar varsayılanlardır. Sabit tuşlar (`Esc`, `Enter`, oklar, `Delete` ve met
 | Çizerken `Shift` | 45°'lik düz çizgiler, kare ve daire |
 | Bulanıklık/mozaikte `Shift` + sürükle | Fırça yerine dikdörtgen |
 | Fare tekerleği | Çizgi kalınlığı ya da fırça boyutu |
-| Çizimin üstünde `Ctrl` + sürükle | Taşı |
+| Çizimin üstünde `Ctrl` + sürükle | Taşı (seçili bir çizim, seçili tüm çizimlerle birlikte taşınır) |
 | `Ctrl` + tık, sonra `Delete` | Çizimi seç ve sil (`Ctrl` basılıyken `Delete` imlecin altındakini siler) |
-| Seçili çizimde ok tuşları | 1 px kaydır (`Shift`: 10 px) |
+| Başka çizimlere `Ctrl` + tık | Seçime ekle ya da seçimden çıkar |
+| Boş alanda `Ctrl` + sürükle | Dikdörtgenin değdiği tüm çizimleri seç |
+| `Ctrl+Shift+A` | Tüm çizimleri seç |
+| Seçili çizimlerde ok tuşları | 1 px kaydır (`Shift`: 10 px) |
 | Metne çift tık ya da seçili metinde `F2` | Metni, rengini ve boyutunu düzenle |
 | Ok tuşları / `Shift` + ok tuşları | Seçimi 1 px taşı / büyüt |
 | `C` (seçim yapmadan) | İmlecin altındaki rengi kopyala |

@@ -62,7 +62,7 @@ times how long it takes until the screen visibly changes. Your numbers will diff
 - Rectangle, ellipse, arrow, line, pen, highlighter, text, numbered steps
 - Blur and pixelate: paint them on like a brush, or hold `Shift` and drag a rectangle
 - Scroll to change the width, with a live preview at the cursor
-- Hold `Ctrl` to move or delete any drawing; double-click text to edit it again
+- Hold `Ctrl` to move or delete any drawing, or several at once; double-click text to edit it again
 - Unlimited undo and redo
 
 **Share**
@@ -154,9 +154,12 @@ can be changed under *Settings > Shortcuts*.
 | `Shift` while drawing | Straight lines at 45° steps, squares and circles |
 | `Shift` + drag with blur or pixelate | Rectangle instead of a brush |
 | Mouse wheel | Line width or brush size |
-| `Ctrl` + drag on a drawing | Move it |
+| `Ctrl` + drag on a drawing | Move it (a selected one moves with all selected drawings) |
 | `Ctrl` + click, then `Delete` | Select a drawing and delete it (holding `Ctrl`, `Delete` removes the one under the cursor) |
-| Arrow keys on a selected drawing | Nudge by 1 px (`Shift`: 10 px) |
+| `Ctrl` + click more drawings | Add them to the selection, or take them out |
+| `Ctrl` + drag on empty space | Select every drawing the rectangle touches |
+| `Ctrl+Shift+A` | Select all drawings |
+| Arrow keys on selected drawings | Nudge by 1 px (`Shift`: 10 px) |
 | Double-click text, or `F2` on selected text | Edit the text, its color and size |
 | Arrow keys / `Shift` + arrow keys | Move / resize the selection by 1 px |
 | `C` (before selecting) | Copy the color under the cursor |

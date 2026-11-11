@@ -219,7 +219,7 @@ From the command line: `wispshot.exe --capture`, `--record`, `--pin` or `--exit`
 
 Changes in the Settings window apply right away; there's no Save button. Everything is stored in `wispshot.ini`
 next to the exe (or in `%APPDATA%\WispShot` if that folder isn't writable). You can also edit it by hand
-(*Settings > General > Settings file* opens it) and restart WispShot; your comments are kept.
+(*Settings > General > Settings file* opens it); it applies as soon as you save, and your comments are kept.
 
 <details>
 <summary>wispshot.ini reference</summary>

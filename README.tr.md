@@ -221,7 +221,7 @@ Komut satırından: `wispshot.exe --capture`, `--record`, `--pin` ya da `--exit`
 
 Ayarlar penceresindeki değişiklikler hemen uygulanır, Kaydet düğmesi yoktur. Hepsi exe'nin yanındaki `wispshot.ini`
 dosyasında tutulur (o klasöre yazılamıyorsa `%APPDATA%\WispShot`). Dosyayı elle de düzenleyebilirsiniz
-(*Ayarlar > Genel > Ayar dosyası* açar), ardından WispShot'ı yeniden başlatın; yorumlarınız korunur.
+(*Ayarlar > Genel > Ayar dosyası* açar); kaydettiğiniz anda uygulanır, yorumlarınız korunur.
 
 <details>
 <summary>wispshot.ini başvurusu</summary>

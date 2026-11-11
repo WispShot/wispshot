@@ -307,7 +307,7 @@ about.support_sub = Ücretsiz ve reklamsız. Desteğiniz geliştirmeyi sürdür�
 about.sponsor = Sponsor ol
 
 # ---- yeni wispshot.ini dosyasına yazılan açıklamalar
-ini.header = WispShot ayarları. Bunları tepsi menüsündeki Ayarlar'dan da değiştirebilirsiniz.\nDosyayı elle düzenlerseniz Ayarlar'ı yeniden açın ya da WispShot'ı yeniden başlatın.\nKısayol örnekleri: F1, Ctrl+Shift+A, Alt+PrintScreen. Kısayolu kapatmak için boş bırakın.
+ini.header = WispShot ayarları. Bunları tepsi menüsündeki Ayarlar'dan da değiştirebilirsiniz.\nElle yaptığınız değişiklikler dosyayı kaydettiğiniz anda uygulanır.\nKısayol örnekleri: F1, Ctrl+Shift+A, Alt+PrintScreen. Kısayolu kapatmak için boş bırakın.
 ini.language = system, en ya da tr
 ini.theme = system, light ya da dark
 ini.pause_fullscreen = Tam ekran oyun ve videolar kendi tuşlarını kullanabilsin

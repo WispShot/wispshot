@@ -270,6 +270,7 @@ fn resident(args: Vec<String>) {
         let cfg = config::load();
         history::expire(cfg.history_days);
         SetTimer(Some(hwnd), TIMER_EXPIRE, 3_600_000, None);
+        watch_ini(hwnd);
         let small = GetSystemMetrics(SM_CXSMICON).max(16);
         let state = State {
             cfg,
@@ -334,6 +335,43 @@ fn register_hotkeys(warn: bool) {
 // ------------------------------------------------------------ full screen
 
 /// Install or remove the foreground-change hook to match the config, then re-check.
+/// Apply hand edits of wispshot.ini without a restart. A thread sleeps on the folder's
+/// change notification (no polling) and asks for a reload when the file's time changes.
+fn watch_ini(app: HWND) {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::Win32::Storage::FileSystem::*;
+    let path = config::ini_path();
+    let Some(dir) = path.parent().map(|d| d.to_path_buf()) else { return };
+    let target = app.0 as isize;
+    let stamp = |p: &std::path::Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    let _ = std::thread::Builder::new().stack_size(64 * 1024).spawn(move || unsafe {
+        let wdir: Vec<u16> = dir.as_os_str().encode_wide().chain(Some(0)).collect();
+        let Ok(h) = FindFirstChangeNotificationW(
+            PCWSTR(wdir.as_ptr()),
+            false,
+            FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_FILE_NAME,
+        ) else {
+            return;
+        };
+        let mut last = stamp(&path);
+        while WaitForSingleObject(h, INFINITE) == WAIT_OBJECT_0 {
+            // editors write in steps: let the save finish before reading it
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            let now = stamp(&path);
+            // an empty file is a save in progress; reading it would write the defaults over it
+            let empty = std::fs::metadata(&path).map(|m| m.len() == 0).unwrap_or(true);
+            if now != last && !empty {
+                last = now;
+                let _ = PostMessageW(Some(HWND(target as *mut _)), WM_APP_CMD, WPARAM(CMD_RELOAD), LPARAM(0));
+            }
+            if FindNextChangeNotification(h).is_err() {
+                break;
+            }
+        }
+        let _ = FindCloseChangeNotification(h);
+    });
+}
+
 fn watch_fullscreen() {
     let Some((on, hook)) = with(|s| (s.cfg.pause_fullscreen, s.fg_hook)) else { return };
     unsafe {

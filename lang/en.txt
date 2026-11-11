@@ -308,7 +308,7 @@ about.support_sub = Free, no ads, no telemetry. Sponsoring keeps it going.
 about.sponsor = Sponsor
 
 # ---- comments written into a new wispshot.ini
-ini.header = WispShot settings. You can also change them in the tray menu under Settings.\nIf you edit this file by hand, choose Settings again or restart WispShot to apply it.\nShortcut examples: F1, Ctrl+Shift+A, Alt+PrintScreen. Leave a shortcut empty to turn it off.
+ini.header = WispShot settings. You can also change them in the tray menu under Settings.\nChanges you make here by hand apply as soon as you save the file.\nShortcut examples: F1, Ctrl+Shift+A, Alt+PrintScreen. Leave a shortcut empty to turn it off.
 ini.language = system, en or tr
 ini.theme = system, light or dark
 ini.pause_fullscreen = Let full-screen games and videos keep their keys

@@ -151,7 +151,7 @@ can be changed under *Settings > Shortcuts*.
 | `Ctrl+L` | Scrolling capture of the selected area |
 | `Ctrl+B` | Blur sensitive info (e-mail, phone, IBAN, card, key) |
 | `Ctrl+A` | Select the current monitor (again: all monitors) |
-| `R` `E` `A` `L` `P` `M` `T` `N` `X` `B` | Rectangle, ellipse, arrow, line, pen, highlighter, text, numbered step, pixelate, blur |
+| `R` `E` `A` `L` `U` `P` `M` `T` `N` `X` `B` | Rectangle, ellipse, arrow, line, ruler, pen, highlighter, text, numbered step, pixelate, blur |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
 | Right-click / `Esc` | Go back a step / close |
 

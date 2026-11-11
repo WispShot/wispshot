@@ -152,7 +152,7 @@ Bunlar varsayılanlardır. Sabit tuşlar (`Esc`, `Enter`, oklar, `Delete` ve met
 | `Ctrl+L` | Seçili bölgeyi kaydırarak çek |
 | `Ctrl+B` | Hassas bilgileri bulanıklaştır (e-posta, telefon, IBAN, kart, anahtar) |
 | `Ctrl+A` | İmlecin olduğu monitörü seç (tekrar: tüm monitörler) |
-| `R` `E` `A` `L` `P` `M` `T` `N` `X` `B` | Dikdörtgen, elips, ok, çizgi, kalem, fosforlu, metin, numaralı adım, mozaik, bulanıklık |
+| `R` `E` `A` `L` `U` `P` `M` `T` `N` `X` `B` | Dikdörtgen, elips, ok, çizgi, cetvel, kalem, fosforlu, metin, numaralı adım, mozaik, bulanıklık |
 | `Ctrl+Z` / `Ctrl+Y` | Geri al / yinele |
 | Sağ tık / `Esc` | Bir adım geri / kapat |
 

@@ -28,6 +28,7 @@
   e-mail address, phone number, IBAN, card number, Turkish ID number (T.C. kimlik no) and API key or token is
   blurred, as one undo step. IBANs, cards and ID numbers must pass their checksum, so amounts, dates and order
   numbers stay as they are.
+- Ruler tool (`U`): a line labelled with its length in pixels (and width × height when it is diagonal).
 
 ## [0.2.1] - 2026-11-11
 

@@ -157,6 +157,7 @@ pub enum Tool {
     Counter,
     Mosaic,
     Blur,
+    Measure,
 }
 
 impl Tool {
@@ -194,6 +195,8 @@ pub enum Item {
         b: (f32, f32),
         c: u32,
         w: f32,
+        /// Ruler: end ticks and the length in pixels.
+        measure: bool,
     },
     Pen {
         pts: Vec<(f32, f32)>,
@@ -267,7 +270,7 @@ impl Item {
         match self {
             Item::Rect { r, w, .. } | Item::Ellipse { r, w, .. } => grow(*r, w / 2.0),
             Item::Arrow { a, b, w, .. } => of(&[*a, *b], w * 2.0 + 4.0),
-            Item::Line { a, b, w, .. } => of(&[*a, *b], w / 2.0),
+            Item::Line { a, b, w, measure, .. } => of(&[*a, *b], if *measure { w * 2.0 + 34.0 } else { w / 2.0 }),
             Item::Pen { pts, w, .. } => of(pts, w / 2.0),
             Item::Text { x, y, s, size, .. } => {
                 let (tw, th) = g.text_format(*size, true).map(|f| g.measure(s, &f)).unwrap_or((*size, *size));
@@ -332,6 +335,46 @@ fn with_alpha(c: u32, a: u32) -> u32 {
 }
 
 /// Draw one annotation. `cache_bitmaps` = keep the GPU bitmap for patches (editor only).
+/// Ruler extras: ticks across both ends and "240 px" by the middle.
+fn draw_measure(g: &Gfx, rt: &ID2D1RenderTarget, a: (f32, f32), b: (f32, f32), c: u32, w: f32) -> Result<()> {
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < 1.0 {
+        return Ok(());
+    }
+    let (nx, ny) = (-dy / len, dx / len);
+    let t = w * 2.0 + 6.0;
+    let br = brush(rt, c)?;
+    unsafe {
+        for p in [a, b] {
+            rt.DrawLine(pt(p.0 - nx * t, p.1 - ny * t), pt(p.0 + nx * t, p.1 + ny * t), &br, w, &g.round);
+        }
+        let label = if dx.abs() >= 1.0 && dy.abs() >= 1.0 {
+            format!("{} px  ({} × {})", len.round(), dx.abs().round(), dy.abs().round())
+        } else {
+            format!("{} px", len.round())
+        };
+        let f = g.text_format(12.0 + w, true)?;
+        let (tw, th) = g.measure(&label, &f);
+        // beside the middle, on the upper / left side of the line
+        let side = if ny > 0.0 || ny == 0.0 && nx > 0.0 { -1.0 } else { 1.0 };
+        let off = t + th / 2.0 + 4.0;
+        let (mx, my) = ((a.0 + b.0) / 2.0 + nx * off * side, (a.1 + b.1) / 2.0 + ny * off * side);
+        let r = rc(mx - tw / 2.0 - 6.0, my - th / 2.0 - 2.0, mx + tw / 2.0 + 6.0, my + th / 2.0 + 2.0);
+        rt.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect: r, radiusX: 4.0, radiusY: 4.0 }, &brush(rt, 0xE01C_1C20)?);
+        let wtxt: Vec<u16> = label.encode_utf16().collect();
+        rt.DrawText(
+            &wtxt,
+            &f,
+            &rc(r.left + 6.0, r.top + 2.0, r.right, r.bottom),
+            &brush(rt, 0xFFFF_FFFF)?,
+            D2D1_DRAW_TEXT_OPTIONS_NONE,
+            DWRITE_MEASURING_MODE_NATURAL,
+        );
+    }
+    Ok(())
+}
+
 pub fn draw_item(g: &Gfx, rt: &ID2D1RenderTarget, it: &Item, cache_bitmaps: bool) -> Result<()> {
     unsafe {
         match it {
@@ -348,9 +391,12 @@ pub fn draw_item(g: &Gfx, rt: &ID2D1RenderTarget, it: &Item, cache_bitmaps: bool
                 };
                 rt.DrawEllipse(&e, &b, *w, None);
             }
-            Item::Line { a, b: bb, c, w } => {
+            Item::Line { a, b: bb, c, w, measure } => {
                 let b = brush(rt, *c)?;
                 rt.DrawLine(pt(a.0, a.1), pt(bb.0, bb.1), &b, *w, &g.round);
+                if *measure {
+                    draw_measure(g, rt, *a, *bb, *c, *w)?;
+                }
             }
             Item::Arrow { a, b: bb, c, w } => {
                 let b = brush(rt, *c)?;

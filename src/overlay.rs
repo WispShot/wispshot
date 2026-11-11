@@ -94,6 +94,7 @@ impl Btn {
             Btn::Tool(Tool::Ellipse) => k(t("tool.ellipse"), K::Ellipse),
             Btn::Tool(Tool::Arrow) => k(t("tool.arrow"), K::Arrow),
             Btn::Tool(Tool::Line) => k(t("tool.line"), K::Line),
+            Btn::Tool(Tool::Measure) => k(t("tool.measure"), K::Measure),
             Btn::Tool(Tool::Pen) => k(t("tool.pen"), K::Pen),
             Btn::Tool(Tool::Marker) => k(t("tool.marker"), K::Marker),
             Btn::Tool(Tool::Text) => k(t("tool.text"), K::Text),
@@ -194,7 +195,7 @@ struct Ov {
     hover: Option<RECT>,
     tool: Tool,
     color: usize,
-    sizes: [f32; 11],
+    sizes: [f32; 12],
     items: Vec<Item>,
     undo: Vec<Op>,
     redo: Vec<Op>,
@@ -279,7 +280,7 @@ pub fn open(mode: Mode, magnifier: bool, deep: bool, veil: Option<HWND>) -> bool
         let mut pt = POINT::default();
         let _ = GetCursorPos(&mut pt);
         let scale = crate::monitor_dpi(MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST)) as f32 / 96.0;
-        let mut sizes = [0f32; 11];
+        let mut sizes = [0f32; 12];
         for t in [
             Tool::None,
             Tool::Rect,
@@ -292,6 +293,7 @@ pub fn open(mode: Mode, magnifier: bool, deep: bool, veil: Option<HWND>) -> bool
             Tool::Counter,
             Tool::Mosaic,
             Tool::Blur,
+            Tool::Measure,
         ] {
             sizes[tool_idx(t)] = t.default_size();
         }
@@ -576,6 +578,7 @@ impl Ov {
             Tool::Ellipse,
             Tool::Arrow,
             Tool::Line,
+            Tool::Measure,
             Tool::Pen,
             Tool::Marker,
             Tool::Text,
@@ -1022,6 +1025,15 @@ impl Ov {
                         1.6 * s,
                         &self.g.round,
                     ),
+                    Btn::Tool(Tool::Measure) => {
+                        // a ruler: a bar with ticks
+                        let (l, rr) = (cx - u * 1.6, cx + u * 1.6);
+                        rt.DrawRectangle(&rc(l, cy - u * 0.6, rr, cy + u * 0.6), &fg, 1.1 * s, None);
+                        for i in 1..4 {
+                            let x = l + (rr - l) * i as f32 / 4.0;
+                            rt.DrawLine(pt(x, cy - u * 0.6), pt(x, cy - if i == 2 { 0.0 } else { u * 0.2 }), &fg, 1.0 * s, None);
+                        }
+                    }
                     Btn::Tool(Tool::Pen) => icon("\u{E70F}", r, &fg),
                     Btn::Tool(Tool::Marker) => icon("\u{E7E6}", r, &fg),
                     Btn::Tool(Tool::Text) => icon("\u{E8D2}", r, &fg),
@@ -1732,12 +1744,12 @@ impl Ov {
                             Item::Ellipse { r, c, w }
                         });
                     }
-                    Tool::Arrow | Tool::Line => {
+                    Tool::Arrow | Tool::Line | Tool::Measure => {
                         let b = self.constrain(x0, y0, fx, fy, false);
                         self.cur = Some(if self.tool == Tool::Arrow {
                             Item::Arrow { a: (x0, y0), b, c, w }
                         } else {
-                            Item::Line { a: (x0, y0), b, c, w }
+                            Item::Line { a: (x0, y0), b, c, w, measure: self.tool == Tool::Measure }
                         });
                     }
                     Tool::Mosaic | Tool::Blur | Tool::Pen | Tool::Marker => match self.cur.as_mut() {
@@ -2041,6 +2053,7 @@ impl Ov {
             K::Ellipse => Tool::Ellipse,
             K::Arrow => Tool::Arrow,
             K::Line => Tool::Line,
+            K::Measure => Tool::Measure,
             K::Pen => Tool::Pen,
             K::Marker => Tool::Marker,
             K::Text => Tool::Text,
@@ -2155,7 +2168,7 @@ impl Ov {
             {
                 Some(size / 2.0)
             }
-            Tool::Rect | Tool::Ellipse | Tool::Arrow | Tool::Line | Tool::Pen | Tool::Marker
+            Tool::Rect | Tool::Ellipse | Tool::Arrow | Tool::Line | Tool::Measure | Tool::Pen | Tool::Marker
                 if !drawing || self.size_hint =>
             {
                 Some((size / 2.0).max(1.0))

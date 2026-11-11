@@ -291,6 +291,15 @@ To add a language, copy `lang/en.txt`, translate the values and add it to `LANGS
   when the recording ends.
 - Windows only. Capture and windowing are written straight against Win32.
 
+## Star history
+
+<a href="https://star-history.com/#WispShot/wispshot&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=WispShot/wispshot&type=Date&theme=dark">
+    <img alt="Star history of WispShot" src="https://api.star-history.com/svg?repos=WispShot/wispshot&type=Date">
+  </picture>
+</a>
+
 ## License
 
 Copyright (C) 2026 Efe Kaputlu. WispShot is free software under the [GNU General Public License v3.0](LICENSE) or

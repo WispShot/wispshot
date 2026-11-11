@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1] - 2026-11-11
+
+### Fixed
+
+- Shortcuts now step aside for games that go full screen a moment after they start (for example Counter-Strike 2).
+  Before, the capture key could still reach WispShot and pull the game out of full screen. WispShot now ignores a
+  shortcut pressed while a full-screen app is in front.
+
 ## [0.2.0] - 2026-11-10
 
 First public release.

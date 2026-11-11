@@ -1,0 +1,39 @@
+name: WinGet
+
+# When a release is published, open a pull request in microsoft/winget-pkgs for the new version.
+# Needs the WINGET_TOKEN secret: a classic token with the public_repo scope from the account that owns the
+# winget-pkgs fork (efekaputlu).
+on:
+  release:
+    types: [released]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to submit (for example v0.2.1)
+        required: true
+
+jobs:
+  winget:
+    runs-on: windows-2025
+    steps:
+      # an update needs the package to be in winget-pkgs already; until the first version is merged, skip
+      - name: Package in WinGet
+        id: known
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/microsoft/winget-pkgs/contents/manifests/w/WispShot/WispShot --silent 2>$null
+          $known = $LASTEXITCODE -eq 0
+          if (-not $known) { "::notice::WispShot.WispShot is not in winget-pkgs yet; run this workflow again once it is." }
+          "known=$($known.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          exit 0
+
+      - if: steps.known.outputs.known == 'true'
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: WispShot.WispShot
+          installers-regex: '-setup-x64\.exe$'
+          release-tag: ${{ inputs.tag || github.event.release.tag_name }}
+          fork-user: efekaputlu
+          token: ${{ secrets.WINGET_TOKEN }}

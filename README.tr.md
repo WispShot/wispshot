@@ -274,6 +274,15 @@ Kaynak düzeni için [İngilizce README](README.md#building-from-source)'ye bak�
   Kayıt bitince hepsi geri gelir.
 - Yalnızca Windows. Yakalama ve pencere katmanı doğrudan Win32 ile yazıldı.
 
+## Yıldız geçmişi
+
+<a href="https://star-history.com/#WispShot/wispshot&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=WispShot/wispshot&type=Date&theme=dark">
+    <img alt="WispShot yıldız geçmişi" src="https://api.star-history.com/svg?repos=WispShot/wispshot&type=Date">
+  </picture>
+</a>
+
 ## Lisans
 
 Telif hakkı (C) 2026 Efe Kaputlu. WispShot, [GNU Genel Kamu Lisansı v3.0](LICENSE) ya da daha sonraki bir sürümü

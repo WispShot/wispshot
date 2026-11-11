@@ -147,6 +147,10 @@ struct State {
     /// Released while the settings window records a new hotkey.
     held: bool,
     fg_hook: HWINEVENTHOOK,
+    /// Size/position changes of the foreground process: a game usually takes focus
+    /// first and goes full screen a moment later, with no further focus change.
+    loc_hook: HWINEVENTHOOK,
+    loc_pid: u32,
 }
 
 /// While suspended, re-check this often (a game can leave full screen without a focus change).
@@ -250,6 +254,8 @@ fn resident(args: Vec<String>) {
             suspended: false,
             held: false,
             fg_hook: HWINEVENTHOOK::default(),
+            loc_hook: HWINEVENTHOOK::default(),
+            loc_pid: 0,
         };
         ST.with(|s| *s.borrow_mut() = Some(state));
         tray(NIM_ADD);
@@ -318,11 +324,56 @@ fn watch_fullscreen() {
             with(|s| s.fg_hook = HWINEVENTHOOK::default());
         }
     }
+    watch_foreground_size();
     check_fullscreen();
 }
 
 unsafe extern "system" fn on_foreground(_: HWINEVENTHOOK, _: u32, _: HWND, _: i32, _: i32, _: u32, _: u32) {
+    watch_foreground_size();
     check_fullscreen();
+}
+
+/// Follow location changes of the foreground window's process only (a global hook would fire constantly).
+fn watch_foreground_size() {
+    let Some((on, hook, pid)) = with(|s| (s.cfg.pause_fullscreen, s.loc_hook, s.loc_pid)) else { return };
+    unsafe {
+        let mut want = 0u32;
+        if on {
+            GetWindowThreadProcessId(GetForegroundWindow(), Some(&mut want));
+            if want == GetCurrentProcessId() {
+                want = 0;
+            }
+        }
+        if want == pid && (want == 0) == hook.is_invalid() {
+            return;
+        }
+        if !hook.is_invalid() {
+            let _ = UnhookWinEvent(hook);
+        }
+        let h = if want != 0 {
+            SetWinEventHook(
+                EVENT_OBJECT_LOCATIONCHANGE,
+                EVENT_OBJECT_LOCATIONCHANGE,
+                None,
+                Some(on_location),
+                want,
+                0,
+                WINEVENT_OUTOFCONTEXT,
+            )
+        } else {
+            HWINEVENTHOOK::default()
+        };
+        with(|s| {
+            s.loc_hook = h;
+            s.loc_pid = if h.is_invalid() { 0 } else { want };
+        });
+    }
+}
+
+unsafe extern "system" fn on_location(_: HWINEVENTHOOK, _: u32, hwnd: HWND, obj: i32, child: i32, _: u32, _: u32) {
+    if obj == OBJID_WINDOW.0 && child == CHILDID_SELF as i32 && hwnd == GetForegroundWindow() {
+        check_fullscreen();
+    }
 }
 
 fn check_fullscreen() {
@@ -721,6 +772,13 @@ fn command(id: usize) {
 unsafe extern "system" fn app_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     match msg {
         WM_HOTKEY => {
+            // the hooks can miss a game that went full screen without any event we see; never act on
+            // a press meant for it (re-checking also releases the keys for the next press)
+            check_fullscreen();
+            let stop_rec = wp.0 as i32 == HK_RECORD && with(|s| s.recording) == Some(true);
+            if with(|s| s.suspended) == Some(true) && !stop_rec {
+                return LRESULT(0);
+            }
             match wp.0 as i32 {
                 HK_CAPTURE => command(CMD_CAPTURE),
                 HK_RECORD => command(CMD_RECORD),
@@ -747,6 +805,11 @@ unsafe extern "system" fn app_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                 }
                 _ => {}
             }
+            LRESULT(0)
+        }
+        // exclusive full screen switches the display mode
+        WM_DISPLAYCHANGE => {
+            check_fullscreen();
             LRESULT(0)
         }
         WM_TIMER if wp.0 == TIMER_FULLSCREEN => {

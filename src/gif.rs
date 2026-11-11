@@ -14,6 +14,9 @@ use windows::Win32::Media::MediaFoundation::*;
 use windows::Win32::System::Com::StructuredStorage::*;
 use windows::Win32::System::Variant::{VT_UI1, VT_UI2};
 
+/// Receives (pixels, width, height, ticks) for each distinct frame.
+type Sink<'a> = dyn FnMut(&[u8], u32, u32, u32) + 'a;
+
 const STREAM: u32 = MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32;
 /// Frames kept for building the palette.
 const SAMPLES: usize = 16;
@@ -164,7 +167,7 @@ unsafe fn frames(
     src: &Path,
     fps: u32,
     max_w: u32,
-    sink: &mut dyn FnMut(&[u8], u32, u32, u32),
+    sink: &mut Sink,
 ) -> Result<()> {
     let mut attrs: Option<IMFAttributes> = None;
     MFCreateAttributes(&mut attrs, 1)?;
@@ -187,7 +190,7 @@ unsafe fn frames(
     let mut pending: Option<(Vec<u8>, u32)> = None;
     let (ow, oh) = geo.out_size(max_w);
     // merge a frame that looks like the held-back one; otherwise hand that one on
-    fn push(sink: &mut dyn FnMut(&[u8], u32, u32, u32), pending: &mut Option<(Vec<u8>, u32)>, px: &[u8], w: u32, h: u32) {
+    fn push(sink: &mut Sink, pending: &mut Option<(Vec<u8>, u32)>, px: &[u8], w: u32, h: u32) {
         match pending {
             Some((p, t)) if same(p, px) => *t += 1,
             _ => {
@@ -196,7 +199,7 @@ unsafe fn frames(
             }
         }
     }
-    fn flush(sink: &mut dyn FnMut(&[u8], u32, u32, u32), pending: &mut Option<(Vec<u8>, u32)>, w: u32, h: u32) {
+    fn flush(sink: &mut Sink, pending: &mut Option<(Vec<u8>, u32)>, w: u32, h: u32) {
         if let Some((p, t)) = pending.take() {
             sink(&p, w, h, t);
         }
@@ -303,7 +306,7 @@ impl Geo {
             put(scan0, pitch);
             let _ = buf.Unlock();
         }
-        for px in out.chunks_exact_mut(4) {
+        for px in out.as_chunks_mut::<4>().0 {
             px[3] = 255;
         }
         Ok(out)
@@ -330,7 +333,7 @@ fn close(a: &[u8], b: &[u8]) -> bool {
 }
 
 fn same(a: &[u8], b: &[u8]) -> bool {
-    a.len() == b.len() && a.chunks_exact(4).zip(b.chunks_exact(4)).all(|(p, q)| close(p, q))
+    a.len() == b.len() && a.as_chunks::<4>().0.iter().zip(b.as_chunks::<4>().0).all(|(p, q)| close(p, q))
 }
 
 /// Bounding box (x0, y0, x1, y1) of the pixels that changed, None if nothing did.

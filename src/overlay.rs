@@ -36,6 +36,7 @@ pub enum Action {
     Pin,
     Ocr,
     Record,
+    Scroll,
     CopyColor,
 }
 
@@ -68,6 +69,7 @@ enum Btn {
     Pin,
     Ocr,
     Record,
+    Scroll,
     Save,
     CopyFile,
     Copy,
@@ -103,6 +105,7 @@ impl Btn {
             Btn::Pin => k(t("editor.pin"), K::PinIt),
             Btn::Ocr => k(t("editor.ocr"), K::Ocr),
             Btn::Record => k(t("editor.record"), K::RecordArea),
+            Btn::Scroll => k(t("editor.scroll"), K::ScrollCapture),
             Btn::Save => k(t("editor.save"), K::Save),
             Btn::CopyFile => k(t("editor.copy_file"), K::CopyFile),
             Btn::Copy => tf("editor.copy_tip", &[&keys::label(K::Copy)]),
@@ -580,6 +583,7 @@ impl Ov {
             Some(Btn::Pin),
             Some(Btn::Ocr),
             Some(Btn::Record),
+            Some(Btn::Scroll),
             Some(Btn::Save),
             Some(Btn::CopyFile),
             None,
@@ -1080,6 +1084,24 @@ impl Ov {
                             None,
                         );
                     }
+                    Btn::Scroll => {
+                        // a tall page with an arrow down its middle
+                        rt.DrawRoundedRectangle(
+                            &D2D1_ROUNDED_RECT {
+                                rect: rc(cx - u * 1.1, cy - u * 1.7, cx + u * 1.1, cy + u * 1.7),
+                                radiusX: 2.0 * s,
+                                radiusY: 2.0 * s,
+                            },
+                            &fg,
+                            1.0 * s,
+                            None,
+                        );
+                        let a = (cx, cy - u * 0.9);
+                        let b = (cx, cy + u * 0.9);
+                        rt.DrawLine(pt(a.0, a.1), pt(b.0, b.1), &fg, 1.2 * s, None);
+                        rt.DrawLine(pt(b.0 - u * 0.5, b.1 - u * 0.5), pt(b.0, b.1), &fg, 1.2 * s, None);
+                        rt.DrawLine(pt(b.0 + u * 0.5, b.1 - u * 0.5), pt(b.0, b.1), &fg, 1.2 * s, None);
+                    }
                     Btn::Save => icon("\u{E74E}", r, &fg),
                     Btn::CopyFile => icon("\u{E8A5}", r, &fg),
                     Btn::Copy => {
@@ -1177,7 +1199,7 @@ impl Ov {
             };
             let geo = (sel.left, sel.top, sel.right - sel.left, sel.bottom - sel.top);
             done.img = match action {
-                Action::Record => None,
+                Action::Record | Action::Scroll => None,
                 Action::Ocr => {
                     let mut c = self.shot.img.crop(geo.0, geo.1, geo.2, geo.3);
                     c.force_opaque();
@@ -1445,6 +1467,7 @@ impl Ov {
             Btn::Pin => self.finish(Action::Pin),
             Btn::Ocr => self.finish(Action::Ocr),
             Btn::Record => self.finish(Action::Record),
+            Btn::Scroll => self.finish(Action::Scroll),
             Btn::Save => self.finish(Action::Save),
             Btn::CopyFile => self.finish(Action::CopyFile),
             Btn::Copy => self.finish(Action::Copy),
@@ -1952,6 +1975,7 @@ impl Ov {
             K::PinIt => self.finish(Action::Pin),
             K::Ocr => self.finish(Action::Ocr),
             K::RecordArea => self.finish(Action::Record),
+            K::ScrollCapture => self.finish(Action::Scroll),
             K::Undo => self.undo(),
             K::Redo => self.redo(),
             K::SelectDrawings => {

@@ -65,6 +65,7 @@ pek değişmez.
 - Tekerlekle kalınlık, imleçte anlık önizleme
 - `Ctrl` basılı tutarak herhangi bir çizimi ya da birkaçını birden taşıyın veya silin; metne çift tıklayıp yeniden düzenleyin
 - Sınırsız geri al ve yinele
+- **Kaydırmalı çekim**: seçili alanda uzun bir sayfayı kaydırın (ya da *Otomatik*e bırakın), tek bir uzun görüntü alın
 
 **Paylaşma**
 - Panoya kopyalama ya da **dosya olarak kopyalama**: doğrudan Explorer'a, e-postaya, sohbet uygulamalarına yapıştırılır
@@ -144,6 +145,7 @@ Bunlar varsayılanlardır. Sabit tuşlar (`Esc`, `Enter`, oklar, `Delete` ve met
 | `Ctrl+T` | Ekrana sabitle |
 | `Ctrl+O` | Seçimdeki metni kopyala (OCR) |
 | `Ctrl+R` | Seçili bölgeyi kaydet (video) |
+| `Ctrl+L` | Seçili bölgeyi kaydırarak çek |
 | `Ctrl+A` | İmlecin olduğu monitörü seç (tekrar: tüm monitörler) |
 | `R` `E` `A` `L` `P` `M` `T` `N` `X` `B` | Dikdörtgen, elips, ok, çizgi, kalem, fosforlu, metin, numaralı adım, mozaik, bulanıklık |
 | `Ctrl+Z` / `Ctrl+Y` | Geri al / yinele |
@@ -270,7 +272,7 @@ Kaynak düzeni için [İngilizce README](README.md#building-from-source)'ye bak�
 
 ## Bilinen sınırlar
 
-- Kaydırmalı yakalama ve çekim geçmişi henüz yok.
+- Çekim geçmişi henüz yok. Kaydırmalı çekim yalnızca aşağı kaydırmayı izler.
 - Çizimleri taşıyabilir, silebilir, metinleri düzenleyebilirsiniz; ama diğer çizimlerin rengi ya da kalınlığı henüz
   değiştirilemiyor.
 - Kayıtlarda ses yok ve kayıt tek monitörle sınırlı (bölge monitörün sınırında kırpılır).

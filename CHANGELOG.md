@@ -15,6 +15,10 @@
   when it ends, with one shared palette, only the changed part of each frame stored, and frames that don't
   change merged. JPG quality and GIF frame rate and width can be set in `wispshot.ini`. Everything uses the
   encoders built into Windows; nothing extra is bundled.
+- Scrolling capture (`Ctrl+L` or the new button in the editor): scroll a long page inside the selected area and
+  the frames are stitched into one tall image, copied to the clipboard and pinned. *Auto* scrolls by itself and
+  stops at the end of the page. A sticky header or footer appears once. `Enter` finishes, `Esc` cancels.
+- A pin larger than the screen opens shrunk to fit.
 
 ## [0.2.1] - 2026-11-11
 

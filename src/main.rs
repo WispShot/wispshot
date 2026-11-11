@@ -28,6 +28,7 @@ mod overlay;
 mod pin;
 mod record;
 mod recui;
+mod scroll;
 mod selftest;
 mod session;
 mod settings;

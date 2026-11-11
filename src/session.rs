@@ -141,7 +141,7 @@ fn has_windows() -> bool {
         let mut cls = [0u16; 32];
         let n = GetClassNameW(h, &mut cls) as usize;
         let c = String::from_utf16_lossy(&cls[..n]);
-        if matches!(c.as_str(), "WispOverlay" | "WispDelay" | "WispPin" | "WispOcr" | "WispRecPill")
+        if matches!(c.as_str(), "WispOverlay" | "WispDelay" | "WispScrollBar" | "WispPin" | "WispOcr" | "WispRecPill")
             || IsWindowVisible(h).as_bool() && c != "WispSession" && c != "WispVeil"
         {
             *(lp.0 as *mut bool) = true;
@@ -229,6 +229,28 @@ fn handle_done() {
             }
         }
         Action::Record => start_recording(done.rect, &cfg),
+        Action::Scroll => {
+            let ok = crate::scroll::start(
+                done.rect,
+                Box::new(move |img| {
+                    if let Some(img) = img {
+                        if let Some(app) = crate::app_hwnd() {
+                            if output::copy_image(app, &img) {
+                                notify(t("scroll.copied"), &tf("scroll.copied_body", &[&img.w.to_string(), &img.h.to_string()]));
+                            }
+                        }
+                        let r = RECT { left: done.rect.left, top: done.rect.top, right: done.rect.left + img.w, bottom: done.rect.top + img.h };
+                        if !handoff("pinfile", &img, r) {
+                            pin::pin(img, r.left, r.top);
+                        }
+                    }
+                    poke();
+                }),
+            );
+            if !ok {
+                notify("WispShot", t("scroll.failed"));
+            }
+        }
     }
 }
 

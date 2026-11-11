@@ -18,7 +18,7 @@ public static class P {
 "@
 switch ($op) {
  "move" { [P]::SetCursorPos($x,$y) | Out-Null }
- "wheel" { for($i=0;$i -lt $y;$i++){ [P]::mouse_event(0x800,0,0,[uint32]$x,[IntPtr]::Zero); Start-Sleep -m 30 } }
+ "wheel" { for($i=0;$i -lt $y;$i++){ [P]::mouse_event(0x800,0,0,[BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$x),0),[IntPtr]::Zero); Start-Sleep -m 30 } }
  "kdown" { [P]::keybd_event([byte]$x,0,0,[IntPtr]::Zero) }
  "kup" { [P]::keybd_event([byte]$x,0,2,[IntPtr]::Zero) }
  "key" { [P]::keybd_event([byte]$x,0,0,[IntPtr]::Zero); Start-Sleep -m 30; [P]::keybd_event([byte]$x,0,2,[IntPtr]::Zero) }

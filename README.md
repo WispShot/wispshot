@@ -64,6 +64,7 @@ times how long it takes until the screen visibly changes. Your numbers will diff
 - Scroll to change the width, with a live preview at the cursor
 - Hold `Ctrl` to move or delete any drawing, or several at once; double-click text to edit it again
 - Unlimited undo and redo
+- **Scrolling capture**: scroll a long page inside the selected area (or let *Auto* do it) and get one tall image
 
 **Share**
 - Copy to the clipboard, or **copy as a file** to paste straight into Explorer, email or chat apps
@@ -143,6 +144,7 @@ can be changed under *Settings > Shortcuts*.
 | `Ctrl+T` | Pin to screen |
 | `Ctrl+O` | Copy the text in the selection (OCR) |
 | `Ctrl+R` | Record the selected area |
+| `Ctrl+L` | Scrolling capture of the selected area |
 | `Ctrl+A` | Select the current monitor (again: all monitors) |
 | `R` `E` `A` `L` `P` `M` `T` `N` `X` `B` | Rectangle, ellipse, arrow, line, pen, highlighter, text, numbered step, pixelate, blur |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
@@ -289,7 +291,7 @@ To add a language, copy `lang/en.txt`, translate the values and add it to `LANGS
 
 ## Known limitations
 
-- No scrolling capture or capture history yet.
+- No capture history yet. Scrolling capture follows downward scrolling only.
 - You can move, delete and edit text drawings, but not yet change the color or width of other drawings.
 - Recordings have no audio and cover a single monitor (an area is clipped to its monitor).
 - While recording, the GPU driver can take around 180 MB and part of a CPU core on busy content. It all goes away

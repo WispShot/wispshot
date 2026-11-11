@@ -73,8 +73,16 @@ pub fn pin(img: Img, x: i32, y: i32) {
         std::ptr::copy_nonoverlapping(img.px.as_ptr(), bits as *mut u32, img.px.len());
         SelectObject(mem, dib.into());
 
-        let (w, h) = (img.w, img.h);
-        let st = Box::into_raw(Box::new(Pin { img, zoom: 1.0, alpha: 255, dib, mem }));
+        // larger than the screen (a scrolling capture, a big clipboard image): start shrunk to fit
+        let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+        let _ = GetMonitorInfoW(MonitorFromPoint(POINT { x, y }, MONITOR_DEFAULTTONEAREST), &mut mi);
+        let wa = mi.rcWork;
+        let (aw, ah) = ((wa.right - wa.left) as f32 * 0.9, (wa.bottom - wa.top) as f32 * 0.9);
+        let zoom = (aw / img.w as f32).min(ah / img.h as f32).clamp(0.1, 1.0);
+        let (w, h) = (((img.w as f32 * zoom).round() as i32).max(8), ((img.h as f32 * zoom).round() as i32).max(8));
+        let x = x.min(wa.right - w).max(wa.left);
+        let y = y.min(wa.bottom - h).max(wa.top);
+        let st = Box::into_raw(Box::new(Pin { img, zoom, alpha: 255, dib, mem }));
         let hwnd = CreateWindowExW(
             WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED,
             class(),

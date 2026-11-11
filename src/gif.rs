@@ -246,6 +246,8 @@ struct Geo {
     x: u32,
     y: u32,
     stride: i32,
+    /// Height of the whole decoded buffer (picture plus padding).
+    fh: u32,
 }
 
 impl Geo {
@@ -264,11 +266,12 @@ impl Geo {
             )
             .is_ok();
         let (x, y, w, h) = if ok && area.Area.cx > 0 && area.Area.cy > 0 {
-            (area.OffsetX.value as u32, area.OffsetY.value as u32, area.Area.cx as u32, area.Area.cy as u32)
+            (area.OffsetX.value.max(0) as u32, area.OffsetY.value.max(0) as u32, area.Area.cx as u32, area.Area.cy as u32)
         } else {
             (0, 0, fw, fh)
         };
-        Ok(Geo { w: w.min(fw), h: h.min(fh), x, y, stride })
+        let (x, y) = (x.min(fw.saturating_sub(1)), y.min(fh.saturating_sub(1)));
+        Ok(Geo { w: w.min(fw - x).max(1), h: h.min(fh - y).max(1), x, y, stride, fh })
     }
 
     fn out_size(&self, max_w: u32) -> (u32, u32) {
@@ -299,10 +302,9 @@ impl Geo {
         } else {
             let mut p = std::ptr::null_mut();
             buf.Lock(&mut p, None, None)?;
-            // a negative default stride means bottom-up rows
             let pitch = self.stride as isize;
-            let total_h = (self.h + self.y) as isize;
-            let scan0 = if pitch < 0 { p.offset(-pitch * (total_h - 1)) } else { p };
+            // a negative default stride means bottom-up rows: the top row is the last one in memory
+            let scan0 = if pitch < 0 { p.offset(-pitch * (self.fh as isize - 1)) } else { p };
             put(scan0, pitch);
             let _ = buf.Unlock();
         }

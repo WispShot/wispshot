@@ -163,6 +163,17 @@ struct State {
 
 /// While suspended, re-check this often (a game can leave full screen without a focus change).
 const TIMER_FULLSCREEN: usize = 2;
+/// A second delayed-capture press came before the countdown window existed: retry the cancel.
+const TIMER_CANCEL_DELAY: usize = 3;
+
+thread_local! {
+    /// When the last countdown session was started (it takes a moment to show its window).
+    static DELAY_SPAWNED: std::cell::Cell<Option<std::time::Instant>> = const { std::cell::Cell::new(None) };
+}
+
+fn delay_starting() -> bool {
+    DELAY_SPAWNED.with(|d| d.get()).is_some_and(|t| t.elapsed().as_millis() < 1500)
+}
 
 thread_local! {
     static ST: RefCell<Option<State>> = const { RefCell::new(None) };
@@ -745,6 +756,7 @@ fn spawn_delayed(secs: u32) {
     if let Ok(exe) = std::env::current_exe() {
         let mut c = std::process::Command::new(exe);
         c.args(["--session", "delay", "0", &secs.to_string()]);
+        DELAY_SPAWNED.with(|d| d.set(Some(std::time::Instant::now())));
         if let Err(e) = c.spawn() {
             notify("WispShot", &tf("err.session", &[&e.to_string()]));
         }
@@ -773,12 +785,23 @@ fn command(id: usize) {
     let Some(cfg) = with(|s| s.cfg.clone()) else { return };
     match id {
         CMD_CAPTURE => {
+            // the countdown just ran out and is opening the editor itself: nothing to do
+            if session_window("WispDelay").is_some_and(|h| unsafe { !IsWindowVisible(h).as_bool() }) {
+                return;
+            }
             // the capture key during a countdown: take it now
             cancel_countdown();
             spawn_session("capture")
         }
         CMD_DELAY => {
-            if !cancel_countdown() {
+            if cancel_countdown() {
+                DELAY_SPAWNED.with(|d| d.set(None));
+            } else if delay_starting() {
+                // pressed twice quickly: cancel as soon as the countdown shows up
+                unsafe {
+                    SetTimer(Some(app), TIMER_CANCEL_DELAY, 100, None);
+                }
+            } else {
                 spawn_delayed(cfg.capture_delay);
             }
         }
@@ -885,6 +908,13 @@ unsafe extern "system" fn app_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
         }
         WM_TIMER if wp.0 == TIMER_FULLSCREEN => {
             check_fullscreen();
+            LRESULT(0)
+        }
+        WM_TIMER if wp.0 == TIMER_CANCEL_DELAY => {
+            if cancel_countdown() || !delay_starting() {
+                let _ = KillTimer(Some(hwnd), wp.0);
+                DELAY_SPAWNED.with(|d| d.set(None));
+            }
             LRESULT(0)
         }
         WM_TIMER => {

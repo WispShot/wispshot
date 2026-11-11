@@ -78,7 +78,12 @@ unsafe fn set_quality(props: &windows::Win32::System::Com::StructuredStorage::IP
     use windows::Win32::System::Com::StructuredStorage::PROPBAG2;
     use windows::Win32::System::Variant::*;
     let mut name = wide("ImageQuality");
-    let bag = PROPBAG2 { pstrName: PWSTR(name.as_mut_ptr()), ..Default::default() };
+    let bag = PROPBAG2 {
+        dwType: windows::Win32::System::Ole::PROPBAG2_TYPE_DATA.0 as u32,
+        vt: VT_R4,
+        pstrName: PWSTR(name.as_mut_ptr()),
+        ..Default::default()
+    };
     let mut v = VARIANT::default();
     (*v.Anonymous.Anonymous).vt = VT_R4;
     (*v.Anonymous.Anonymous).Anonymous.fltVal = q;

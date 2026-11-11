@@ -48,6 +48,7 @@ enum Sg {
     VideoMode,
     Fps,
     Delay,
+    HistoryDays,
     ImageFmt,
     VideoFmt,
     Frame,
@@ -78,6 +79,8 @@ const PAGES: [(&str, char); 6] = [
 ];
 const FPS: [u32; 4] = [15, 24, 30, 60];
 const DELAYS: [u32; 3] = [3, 5, 10];
+/// History age limits in days (0: never delete by age).
+const DAYS: [u32; 5] = [0, 1, 7, 30, 90];
 const GROUPS: [(Scope, &str); 4] = [
     (Scope::Global, "keys.group_global"),
     (Scope::Editor, "keys.group_editor"),
@@ -422,6 +425,7 @@ impl St {
             Sg::VideoMode => Some(!self.cfg.video_ask as usize),
             Sg::Fps => FPS.iter().position(|f| *f == self.cfg.fps),
             Sg::Delay => DELAYS.iter().position(|d| *d == self.cfg.capture_delay),
+            Sg::HistoryDays => DAYS.iter().position(|d| *d == self.cfg.history_days),
             Sg::ImageFmt => output::Fmt::ALL.iter().position(|f| *f == self.cfg.image_format),
             Sg::VideoFmt => Some(self.cfg.gif as usize),
             Sg::Frame => crate::frame::Style::ALL.iter().position(|f| *f == self.cfg.frame),
@@ -644,6 +648,10 @@ impl St {
                 let sub = tf("capture.history_sub", &[&self.cfg.history_keep.to_string()]);
                 card(self, &mut y, t("capture.history"), &sub, 140.0, &mut body, &mut |st, r, h| {
                     st.toggle(rt, r, Tg::History, h)
+                });
+                let ages = [t("capture.age_never"), t("capture.age_day"), t("capture.age_week"), t("capture.age_month"), t("capture.age_3months")];
+                card(self, &mut y, t("capture.history_age"), t("capture.history_age_sub"), 400.0, &mut body, &mut |st, r, h| {
+                    st.seg(rt, r, Sg::HistoryDays, &ages, h)
                 });
             }
             4 => {
@@ -965,6 +973,7 @@ impl St {
                     Sg::VideoMode => self.cfg.video_ask = i == 0,
                     Sg::Fps => self.cfg.fps = FPS[i],
                     Sg::Delay => self.cfg.capture_delay = DELAYS[i],
+                    Sg::HistoryDays => self.cfg.history_days = DAYS[i],
                     Sg::ImageFmt => self.cfg.image_format = output::Fmt::ALL[i],
                     Sg::VideoFmt => self.cfg.gif = i == 1,
                     Sg::Frame => self.cfg.frame = crate::frame::Style::ALL[i],

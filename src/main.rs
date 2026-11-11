@@ -134,6 +134,7 @@ const CMD_MENU: usize = 111;
 /// Capture after `capture_delay` seconds; again cancels the countdown.
 const CMD_DELAY: usize = 112;
 const CMD_HISTORY: usize = 113;
+const CMD_SPONSOR: usize = 114;
 
 // session -> resident messages (WM_COPYDATA dwData)
 pub const IPC_NOTIFY: usize = 1;
@@ -167,6 +168,8 @@ struct State {
 const TIMER_FULLSCREEN: usize = 2;
 /// A second delayed-capture press came before the countdown window existed: retry the cancel.
 const TIMER_CANCEL_DELAY: usize = 3;
+/// Hourly check for history images past their age limit.
+const TIMER_EXPIRE: usize = 4;
 
 thread_local! {
     /// When the last countdown session was started (it takes a moment to show its window).
@@ -264,6 +267,8 @@ fn resident(args: Vec<String>) {
         let _ = ChangeWindowMessageFilterEx(hwnd, WM_COPYDATA, MSGFLT_ALLOW, None);
 
         let cfg = config::load();
+        history::expire(cfg.history_days);
+        SetTimer(Some(hwnd), TIMER_EXPIRE, 3_600_000, None);
         let small = GetSystemMetrics(SM_CXSMICON).max(16);
         let state = State {
             cfg,
@@ -624,6 +629,7 @@ fn tray_menu() {
         Row::Sep,
         item(CMD_SETTINGS, '\u{E713}', t("menu.settings"), ""),
         Row::Toggle { id: CMD_AUTOSTART, icon: '\u{E7F4}', text: t("menu.autostart").into(), on: autostart_enabled() },
+        item(CMD_SPONSOR, '\u{EB51}', t("menu.sponsor"), ""),
         Row::Sep,
         item(CMD_EXIT, '\u{E7E8}', t("menu.exit"), ""),
     ]);
@@ -819,6 +825,9 @@ fn command(id: usize) {
         CMD_CLOSEPINS => close_all_pins(),
         CMD_SHOTS => open_path(&cfg.save_dir, false),
         CMD_VIDEOS => open_path(&cfg.video_dir, false),
+        CMD_SPONSOR => unsafe {
+            ShellExecuteW(None, w!("open"), w!("https://github.com/sponsors/efekaputlu"), None, None, SW_SHOWNORMAL);
+        },
         CMD_HISTORY => match session_window("WispHistory") {
             Some(h) => unsafe {
                 let _ = ShowWindow(h, SW_RESTORE);
@@ -846,6 +855,7 @@ fn command(id: usize) {
         },
         CMD_RELOAD => {
             let cfg = config::load();
+            history::expire(cfg.history_days);
             with(|s| s.cfg = cfg);
             register_hotkeys(true);
             watch_fullscreen();
@@ -910,6 +920,10 @@ unsafe extern "system" fn app_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
         }
         WM_TIMER if wp.0 == TIMER_FULLSCREEN => {
             check_fullscreen();
+            LRESULT(0)
+        }
+        WM_TIMER if wp.0 == TIMER_EXPIRE => {
+            history::expire(with(|s| s.cfg.history_days).unwrap_or(0));
             LRESULT(0)
         }
         WM_TIMER if wp.0 == TIMER_CANCEL_DELAY => {

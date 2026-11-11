@@ -76,6 +76,23 @@ fn prune(keep: u32, max_mb: u32) {
     }
 }
 
+/// Delete history images older than `days` (0: keep them). Runs even with the
+/// history off, so what was kept before still goes when its time is up.
+pub fn expire(days: u32) {
+    if days == 0 {
+        return;
+    }
+    let Some(limit) = std::time::SystemTime::now().checked_sub(std::time::Duration::from_secs(days as u64 * 86_400))
+    else {
+        return;
+    };
+    for p in files() {
+        if std::fs::metadata(&p).and_then(|m| m.modified()).is_ok_and(|t| t < limit) {
+            remove(&p);
+        }
+    }
+}
+
 /// Keep a finished capture. Returns where it went (for the OCR index).
 pub fn add(img: &Img, cfg: &Config) -> Option<PathBuf> {
     if !cfg.history {
@@ -84,6 +101,7 @@ pub fn add(img: &Img, cfg: &Config) -> Option<PathBuf> {
     let p = dir().join(output::timestamp_name("WispShot", "png"));
     output::save(img, &p).ok()?;
     prune(cfg.history_keep.max(1), cfg.history_mb.max(1));
+    expire(cfg.history_days);
     Some(p)
 }
 
@@ -233,6 +251,7 @@ pub fn open() -> bool {
         RegisterClassExW(&wc);
         let Ok(g) = Gfx::new() else { return false };
         let cfg = config::load();
+        expire(cfg.history_days);
         let mut pt = POINT::default();
         let _ = GetCursorPos(&mut pt);
         let mon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);

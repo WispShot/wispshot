@@ -57,6 +57,8 @@ pub struct Config {
     pub history: bool,
     pub history_keep: u32,
     pub history_mb: u32,
+    /// Delete history images older than this many days (0: never).
+    pub history_days: u32,
     /// Read the text in history images (for searching).
     pub history_ocr: bool,
     /// Drawings on a recording fade out after a few seconds (steps stay).
@@ -118,7 +120,7 @@ fn default_ini() -> String {
     );
     s += &format!("\n[record]\n; {}\nvideo_dir =\n; {}\nsave_mode = folder\nnotify = true\nfps = 30\ncursor = true\n; {}\nink_fade = true\n; {}\nformat = mp4\n; {}\ngif_fps = 15\ngif_width = 800\n", t("ini.video_dir"), t("ini.video_mode"), t("ini.ink_fade"), t("ini.video_format"), t("ini.gif"));
     s += &format!("\n[capture]\nmagnifier = true\n; {}\ndetect_elements = false\n; {}\ndelay = 3\n", t("ini.detect"), t("ini.delay"));
-    s += &format!("\n[history]\n; {}\nenabled = false\n; {}\nkeep = 100\nmax_mb = 500\n; {}\nocr = true\n", t("ini.history"), t("ini.history_limit"), t("ini.history_ocr"));
+    s += &format!("\n[history]\n; {}\nenabled = false\n; {}\nkeep = 100\nmax_mb = 500\n; {}\nmax_days = 0\n; {}\nocr = true\n", t("ini.history"), t("ini.history_limit"), t("ini.history_days"), t("ini.history_ocr"));
     s += &format!("\n[keys]\n; {}\n", t("ini.keys"));
     for d in DEFS.iter().filter(|d| d.scope != Scope::Global) {
         s += &format!("{} = {}\n", d.ini, d.default);
@@ -205,6 +207,7 @@ pub fn save(cfg: &Config) -> std::io::Result<()> {
         ("history", "enabled", tf(cfg.history)),
         ("history", "keep", cfg.history_keep.to_string()),
         ("history", "max_mb", cfg.history_mb.to_string()),
+        ("history", "max_days", cfg.history_days.to_string()),
         ("history", "ocr", tf(cfg.history_ocr)),
     ];
     for i in 0..DEFS.len() {
@@ -389,6 +392,7 @@ pub fn load() -> Config {
         history: b("history.enabled", false),
         history_keep: get("history.keep", "100").parse::<u32>().unwrap_or(100).max(1),
         history_mb: get("history.max_mb", "500").parse::<u32>().unwrap_or(500).max(1),
+        history_days: get("history.max_days", "0").parse::<u32>().unwrap_or(0).min(3650),
         history_ocr: b("history.ocr", true),
         ink_fade: b("record.ink_fade", true),
     };

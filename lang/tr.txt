@@ -278,6 +278,9 @@ about.memory_off = Tepsi uygulaması çalışmıyor
 about.license = Lisans
 about.license_sub = GNU GPL v3. Kullanmak, değiştirmek ve paylaşmak serbest.
 about.author = Geliştiren
+about.support = WispShot'a destek olun
+about.support_sub = Ücretsiz ve reklamsız. Desteğiniz geliştirmeyi sürdürür.
+about.sponsor = Sponsor ol
 
 # ---- yeni wispshot.ini dosyasına yazılan açıklamalar
 ini.header = WispShot ayarları. Bunları tepsi menüsündeki Ayarlar'dan da değiştirebilirsiniz.\nDosyayı elle düzenlerseniz Ayarlar'ı yeniden açın ya da WispShot'ı yeniden başlatın.\nKısayol örnekleri: F1, Ctrl+Shift+A, Alt+PrintScreen. Kısayolu kapatmak için boş bırakın.

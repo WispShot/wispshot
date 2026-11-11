@@ -65,6 +65,7 @@ enum Act {
     OpenDir(bool),
     OpenIni,
     ResetKeys,
+    Sponsor,
 }
 
 const PAGES: [(&str, char); 6] = [
@@ -693,6 +694,12 @@ impl St {
                 card(self, &mut y, t("about.memory"), &mem, 20.0, &mut body, &mut |_, _, _| {});
                 card(self, &mut y, t("about.license"), t("about.license_sub"), 20.0, &mut body, &mut |_, _, _| {});
                 card(self, &mut y, t("about.author"), "Efe Kaputlu", 20.0, &mut body, &mut |_, _, _| {});
+                card(self, &mut y, t("about.support"), t("about.support_sub"), 150.0, &mut body, &mut |st, r, h| {
+                    let label = t("about.sponsor");
+                    let bw = st.g.measure(label, &f.body).0 + 32.0;
+                    let b = rc(r.right - 18.0 - bw, (r.top + r.bottom) / 2.0 - 16.0, r.right - 18.0, (r.top + r.bottom) / 2.0 + 16.0);
+                    st.button(rt, b, label, Act::Sponsor, h);
+                });
             }
         }
         let content_h = y - top + 8.0;
@@ -982,6 +989,9 @@ impl St {
                 crate::open_path(if video { &self.cfg.video_dir } else { &self.cfg.save_dir }, false)
             }
             Act::OpenIni => open_ini(),
+            Act::Sponsor => unsafe {
+                ShellExecuteW(None, w!("open"), w!("https://github.com/sponsors/efekaputlu"), None, None, SW_SHOWNORMAL);
+            },
             Act::ResetKeys => {
                 self.cfg.keys = DEFS.iter().map(|d| d.default.to_string()).collect();
                 self.commit(t("keys.reset_done"));

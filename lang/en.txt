@@ -279,6 +279,9 @@ about.memory_off = The tray app isn't running
 about.license = License
 about.license_sub = GNU GPL v3. Free to use, change and share.
 about.author = Made by
+about.support = Support WispShot
+about.support_sub = Free, no ads, no telemetry. Sponsoring keeps it going.
+about.sponsor = Sponsor
 
 # ---- comments written into a new wispshot.ini
 ini.header = WispShot settings. You can also change them in the tray menu under Settings.\nIf you edit this file by hand, choose Settings again or restart WispShot to apply it.\nShortcut examples: F1, Ctrl+Shift+A, Alt+PrintScreen. Leave a shortcut empty to turn it off.

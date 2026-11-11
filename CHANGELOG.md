@@ -30,6 +30,7 @@
   numbers stay as they are.
 - Share frame (*Settings > Screenshots*): copied and saved screenshots get a margin, rounded corners and a soft
   shadow on a color, light or dark background. `F` in the editor switches it for one capture.
+- A *Support WispShot* card with a Sponsor button on *Settings > About*.
 - Ruler tool (`U`): a line labelled with its length in pixels (and width × height when it is diagonal).
 
 ## [0.2.1] - 2026-11-11

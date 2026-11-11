@@ -214,10 +214,9 @@ fn label(p: &Path) -> String {
     let n = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let d: Vec<&str> = n.split('_').collect();
     match d.as_slice() {
-        [_, date, time, ..] if date.len() == 8 && time.len() >= 4 => tf(
-            "history.date",
-            &[&date[0..4], &date[4..6], &date[6..8], &time[0..2], &time[2..4]],
-        ),
+        [_, date, time, ..] if date.len() == 8 && time.len() >= 4 => {
+            tf("history.date", &[&date[0..4], &date[4..6], &date[6..8], &time[0..2], &time[2..4]])
+        }
         _ => n,
     }
 }
@@ -448,8 +447,15 @@ impl Hs {
             let sc = f.CreateBitmapScaler().ok()?;
             sc.Initialize(&fr, tw, th, WICBitmapInterpolationModeFant).ok()?;
             let conv = f.CreateFormatConverter().ok()?;
-            conv.Initialize(&sc, &GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, None, 0.0, WICBitmapPaletteTypeCustom)
-                .ok()?;
+            conv.Initialize(
+                &sc,
+                &GUID_WICPixelFormat32bppPBGRA,
+                WICBitmapDitherTypeNone,
+                None,
+                0.0,
+                WICBitmapPaletteTypeCustom,
+            )
+            .ok()?;
             // the pixels were scaled for this DPI: tell Direct2D, so its size in DIPs is TW x TH
             let props = D2D1_BITMAP_PROPERTIES {
                 pixelFormat: D2D1_PIXEL_FORMAT {
@@ -476,11 +482,8 @@ impl Hs {
         unsafe {
             let mut r = RECT::default();
             let _ = GetClientRect(self.hwnd, &mut r);
-            let props = D2D1_RENDER_TARGET_PROPERTIES {
-                dpiX: self.dpi as f32,
-                dpiY: self.dpi as f32,
-                ..Default::default()
-            };
+            let props =
+                D2D1_RENDER_TARGET_PROPERTIES { dpiX: self.dpi as f32, dpiY: self.dpi as f32, ..Default::default() };
             let hp = D2D1_HWND_RENDER_TARGET_PROPERTIES {
                 hwnd: self.hwnd,
                 pixelSize: D2D_SIZE_U { width: r.right as u32, height: r.bottom as u32 },
@@ -635,7 +638,11 @@ fn hit(x: i32, y: i32) -> Option<Hit> {
             .iter()
             .rev()
             .find(|(r, h)| {
-                x >= r.left && x <= r.right && y >= r.top && y <= r.bottom && (!matches!(h, Hit::Item(_)) || y >= TOP - 6.0)
+                x >= r.left
+                    && x <= r.right
+                    && y >= r.top
+                    && y <= r.bottom
+                    && (!matches!(h, Hit::Item(_)) || y >= TOP - 6.0)
             })
             .map(|(_, h)| *h)
     })
@@ -709,7 +716,8 @@ fn menu(hwnd: HWND, i: usize) {
 fn clear_all(hwnd: HWND) {
     let body = wide(t("history.clear_confirm"));
     let title = wide(t("history.window_title"));
-    let r = unsafe { MessageBoxW(Some(hwnd), PCWSTR(body.as_ptr()), PCWSTR(title.as_ptr()), MB_YESNO | MB_ICONWARNING) };
+    let r =
+        unsafe { MessageBoxW(Some(hwnd), PCWSTR(body.as_ptr()), PCWSTR(title.as_ptr()), MB_YESNO | MB_ICONWARNING) };
     if r == IDYES {
         for p in files() {
             remove(&p);
@@ -762,7 +770,8 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
         WM_SIZE => {
             with(|s| {
                 if let Some(rt) = &s.rt {
-                    let _ = rt.Resize(&D2D_SIZE_U { width: (lp.0 & 0xFFFF) as u32, height: ((lp.0 >> 16) & 0xFFFF) as u32 });
+                    let _ = rt
+                        .Resize(&D2D_SIZE_U { width: (lp.0 & 0xFFFF) as u32, height: ((lp.0 >> 16) & 0xFFFF) as u32 });
                 }
                 s.scroll_by(0.0);
             });

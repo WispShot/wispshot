@@ -160,11 +160,19 @@ pub fn load(path: &Path) -> Option<Img> {
     unsafe {
         let f = wic().ok()?;
         let p = wide(&path.to_string_lossy());
-        let dec = f.CreateDecoderFromFilename(PCWSTR(p.as_ptr()), None, GENERIC_READ, WICDecodeMetadataCacheOnDemand).ok()?;
+        let dec =
+            f.CreateDecoderFromFilename(PCWSTR(p.as_ptr()), None, GENERIC_READ, WICDecodeMetadataCacheOnDemand).ok()?;
         let fr = dec.GetFrame(0).ok()?;
         let conv = f.CreateFormatConverter().ok()?;
-        conv.Initialize(&fr, &GUID_WICPixelFormat32bppBGR, WICBitmapDitherTypeNone, None, 0.0, WICBitmapPaletteTypeCustom)
-            .ok()?;
+        conv.Initialize(
+            &fr,
+            &GUID_WICPixelFormat32bppBGR,
+            WICBitmapDitherTypeNone,
+            None,
+            0.0,
+            WICBitmapPaletteTypeCustom,
+        )
+        .ok()?;
         let (mut w, mut h) = (0u32, 0u32);
         conv.GetSize(&mut w, &mut h).ok()?;
         if w == 0 || h == 0 || w > 32768 || h > 65536 {

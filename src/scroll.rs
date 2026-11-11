@@ -239,9 +239,8 @@ pub fn start(r: RECT, on_done: Box<dyn Fn(Option<Img>)>) -> bool {
         SetWindowRgn(frame, Some(outer), false);
         exclude(frame);
 
-        let s = crate::monitor_dpi(MonitorFromPoint(POINT { x: r.left, y: r.top }, MONITOR_DEFAULTTONEAREST))
-            as f32
-            / 96.0;
+        let s =
+            crate::monitor_dpi(MonitorFromPoint(POINT { x: r.left, y: r.top }, MONITOR_DEFAULTTONEAREST)) as f32 / 96.0;
         let Ok(bar) = CreateWindowExW(
             WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED,
             w!("WispScrollBar"),
@@ -474,7 +473,13 @@ fn render() {
 
 fn hit(lp: LPARAM) -> Option<Btn> {
     let (x, y) = crate::lparam_xy(lp);
-    with(|c| c.btns.iter().find(|(r, _)| x as f32 >= r.left && x as f32 <= r.right && y as f32 >= r.top && y as f32 <= r.bottom).map(|(_, b)| *b)).flatten()
+    with(|c| {
+        c.btns
+            .iter()
+            .find(|(r, _)| x as f32 >= r.left && x as f32 <= r.right && y as f32 >= r.top && y as f32 <= r.bottom)
+            .map(|(_, b)| *b)
+    })
+    .flatten()
 }
 
 unsafe extern "system" fn frame_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {

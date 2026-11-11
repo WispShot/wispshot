@@ -72,10 +72,7 @@ pub fn lines(img: &Img) -> Result<Vec<Vec<Word>>> {
         let mut ws = vec![];
         for w in line.Words()? {
             let r = w.BoundingRect()?;
-            ws.push((
-                w.Text()?.to_string_lossy(),
-                [r.X / f, r.Y / f, (r.X + r.Width) / f, (r.Y + r.Height) / f],
-            ));
+            ws.push((w.Text()?.to_string_lossy(), [r.X / f, r.Y / f, (r.X + r.Width) / f, (r.Y + r.Height) / f]));
         }
         out.push(ws);
     }

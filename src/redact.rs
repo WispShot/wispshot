@@ -89,7 +89,9 @@ fn is_token(w: &str) -> bool {
         return false;
     }
     // a link without its scheme (gitlab.com/org/repo/...)
-    if w.split_once('/').is_some_and(|(host, _)| host.contains('.') && host.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-'))) {
+    if w.split_once('/').is_some_and(|(host, _)| {
+        host.contains('.') && host.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-'))
+    }) {
         return false;
     }
     let digits = w.chars().filter(|c| c.is_ascii_digit()).count();
@@ -97,7 +99,15 @@ fn is_token(w: &str) -> bool {
     let lower = w.chars().filter(|c| c.is_ascii_lowercase()).count();
     // random text keeps switching between upper case, lower case and digits; names and
     // paths (Projects2026, screenshot_20261111) switch only now and then
-    let class = |c: char| if c.is_ascii_digit() { 0 } else if c.is_ascii_uppercase() { 1 } else { 2 };
+    let class = |c: char| {
+        if c.is_ascii_digit() {
+            0
+        } else if c.is_ascii_uppercase() {
+            1
+        } else {
+            2
+        }
+    };
     let al: Vec<char> = w.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
     let switches = al.windows(2).filter(|p| class(p[0]) != class(p[1])).count();
     digits >= 3 && upper >= 2 && lower >= 2 && switches * 5 >= al.len() * 2
@@ -178,7 +188,11 @@ fn luhn_card(run: &str, d: &[u8]) -> bool {
             let x = x as u32;
             if i % 2 == 1 {
                 let y = x * 2;
-                if y > 9 { y - 9 } else { y }
+                if y > 9 {
+                    y - 9
+                } else {
+                    y
+                }
             } else {
                 x
             }
@@ -287,7 +301,11 @@ mod tests {
     use super::*;
 
     fn line(words: &[&str]) -> Vec<Word> {
-        words.iter().enumerate().map(|(i, w)| (w.to_string(), [i as f32 * 10.0, 0.0, i as f32 * 10.0 + 8.0, 10.0])).collect()
+        words
+            .iter()
+            .enumerate()
+            .map(|(i, w)| (w.to_string(), [i as f32 * 10.0, 0.0, i as f32 * 10.0 + 8.0, 10.0]))
+            .collect()
     }
 
     fn hidden(words: &[&str]) -> Vec<[f32; 4]> {
@@ -298,7 +316,10 @@ mod tests {
     fn finds_sensitive_things() {
         assert_eq!(hidden(&["mail:", "efe@example.com,", "thanks"]).len(), 1);
         // a valid test IBAN, written in groups
-        assert_eq!(hidden(&["IBAN", "TR33", "0006", "1005", "1978", "6457", "8413", "26"]), vec![[10.0, 0.0, 78.0, 10.0]]);
+        assert_eq!(
+            hidden(&["IBAN", "TR33", "0006", "1005", "1978", "6457", "8413", "26"]),
+            vec![[10.0, 0.0, 78.0, 10.0]]
+        );
         assert_eq!(hidden(&["card", "4111", "1111", "1111", "1111"]).len(), 1);
         assert_eq!(hidden(&["TC:", "10000000146"]).len(), 1);
         assert_eq!(hidden(&["tel", "+90", "532", "123", "45", "67"]), vec![[10.0, 0.0, 58.0, 10.0]]);

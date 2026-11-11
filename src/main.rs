@@ -14,8 +14,8 @@
 mod capture;
 mod config;
 mod countdown;
-mod gfx;
 mod frame;
+mod gfx;
 mod gif;
 mod history;
 mod i18n;
@@ -309,12 +309,9 @@ fn register_hotkeys(warn: bool) {
     };
     let mut failed = vec![];
     unsafe {
-        for (id, k) in [
-            (HK_CAPTURE, K::Capture),
-            (HK_DELAY, K::CaptureDelayed),
-            (HK_RECORD, K::Record),
-            (HK_PIN, K::PinClipboard),
-        ] {
+        for (id, k) in
+            [(HK_CAPTURE, K::Capture), (HK_DELAY, K::CaptureDelayed), (HK_RECORD, K::Record), (HK_PIN, K::PinClipboard)]
+        {
             let (hk, txt) = (cfg.hotkey(k), cfg.key_label(k));
             let _ = UnregisterHotKey(Some(app), id);
             // in a full-screen game the keys belong to the game; a running recording can still be stopped

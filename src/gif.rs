@@ -162,13 +162,7 @@ unsafe fn write_frame(
 
 /// Decode `src` and call `sink(pixels, w, h, ticks)` once per distinct frame, where
 /// `ticks` is how many 1/fps steps it stays on screen. Pixels are BGRX, top-down.
-unsafe fn frames(
-    f: &IWICImagingFactory,
-    src: &Path,
-    fps: u32,
-    max_w: u32,
-    sink: &mut Sink,
-) -> Result<()> {
+unsafe fn frames(f: &IWICImagingFactory, src: &Path, fps: u32, max_w: u32, sink: &mut Sink) -> Result<()> {
     let mut attrs: Option<IMFAttributes> = None;
     MFCreateAttributes(&mut attrs, 1)?;
     let attrs = attrs.ok_or_else(|| Error::from(windows::Win32::Foundation::E_FAIL))?;
@@ -266,7 +260,12 @@ impl Geo {
             )
             .is_ok();
         let (x, y, w, h) = if ok && area.Area.cx > 0 && area.Area.cy > 0 {
-            (area.OffsetX.value.max(0) as u32, area.OffsetY.value.max(0) as u32, area.Area.cx as u32, area.Area.cy as u32)
+            (
+                area.OffsetX.value.max(0) as u32,
+                area.OffsetY.value.max(0) as u32,
+                area.Area.cx as u32,
+                area.Area.cy as u32,
+            )
         } else {
             (0, 0, fw, fh)
         };

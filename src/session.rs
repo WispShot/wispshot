@@ -65,7 +65,16 @@ pub fn run(kind: &str, veil: Option<HWND>, extra: &[String]) {
         };
         crate::set_app_hwnd(hwnd);
         let cfg = config::load();
-        S.with(|s| *s.borrow_mut() = Some(Sess { cfg: cfg.clone(), rec: None, rec_start: None, ocr_pending: false, indexing: 0, dialog: false }));
+        S.with(|s| {
+            *s.borrow_mut() = Some(Sess {
+                cfg: cfg.clone(),
+                rec: None,
+                rec_start: None,
+                ocr_pending: false,
+                indexing: 0,
+                dialog: false,
+            })
+        });
 
         let started = match kind {
             "record" => overlay::open(overlay::Mode::Record, cfg.magnifier, cfg.detect_elements, veil),
@@ -192,7 +201,9 @@ fn handle_done() {
     let Some(app) = crate::app_hwnd() else { return };
     let Some(cfg) = with(|s| s.cfg.clone()) else { return };
     use overlay::Action;
-    if !done.from_pin && matches!(done.action, Action::Copy | Action::CopyFile | Action::Save | Action::Pin | Action::Ocr) {
+    if !done.from_pin
+        && matches!(done.action, Action::Copy | Action::CopyFile | Action::Save | Action::Pin | Action::Ocr)
+    {
         if let Some(img) = &done.img {
             keep(img, &cfg);
         }
@@ -272,10 +283,18 @@ fn handle_done() {
                         keep(&img, &cfg);
                         if let Some(app) = crate::app_hwnd() {
                             if output::copy_image(app, &img) {
-                                notify(t("scroll.copied"), &tf("scroll.copied_body", &[&img.w.to_string(), &img.h.to_string()]));
+                                notify(
+                                    t("scroll.copied"),
+                                    &tf("scroll.copied_body", &[&img.w.to_string(), &img.h.to_string()]),
+                                );
                             }
                         }
-                        let r = RECT { left: done.rect.left, top: done.rect.top, right: done.rect.left + img.w, bottom: done.rect.top + img.h };
+                        let r = RECT {
+                            left: done.rect.left,
+                            top: done.rect.top,
+                            right: done.rect.left + img.w,
+                            bottom: done.rect.top + img.h,
+                        };
                         if !handoff("pinfile", &img, r) {
                             pin::pin(img, r.left, r.top);
                         }

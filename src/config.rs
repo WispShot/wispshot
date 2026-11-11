@@ -119,8 +119,18 @@ fn default_ini() -> String {
         t("ini.frame")
     );
     s += &format!("\n[record]\n; {}\nvideo_dir =\n; {}\nsave_mode = folder\nnotify = true\nfps = 30\ncursor = true\n; {}\nink_fade = true\n; {}\nformat = mp4\n; {}\ngif_fps = 15\ngif_width = 800\n", t("ini.video_dir"), t("ini.video_mode"), t("ini.ink_fade"), t("ini.video_format"), t("ini.gif"));
-    s += &format!("\n[capture]\nmagnifier = true\n; {}\ndetect_elements = false\n; {}\ndelay = 3\n", t("ini.detect"), t("ini.delay"));
-    s += &format!("\n[history]\n; {}\nenabled = false\n; {}\nkeep = 100\nmax_mb = 500\n; {}\nmax_days = 0\n; {}\nocr = true\n", t("ini.history"), t("ini.history_limit"), t("ini.history_days"), t("ini.history_ocr"));
+    s += &format!(
+        "\n[capture]\nmagnifier = true\n; {}\ndetect_elements = false\n; {}\ndelay = 3\n",
+        t("ini.detect"),
+        t("ini.delay")
+    );
+    s += &format!(
+        "\n[history]\n; {}\nenabled = false\n; {}\nkeep = 100\nmax_mb = 500\n; {}\nmax_days = 0\n; {}\nocr = true\n",
+        t("ini.history"),
+        t("ini.history_limit"),
+        t("ini.history_days"),
+        t("ini.history_ocr")
+    );
     s += &format!("\n[keys]\n; {}\n", t("ini.keys"));
     for d in DEFS.iter().filter(|d| d.scope != Scope::Global) {
         s += &format!("{} = {}\n", d.ini, d.default);

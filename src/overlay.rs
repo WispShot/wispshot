@@ -1039,7 +1039,13 @@ impl Ov {
                         rt.DrawRectangle(&rc(l, cy - u * 0.6, rr, cy + u * 0.6), &fg, 1.1 * s, None);
                         for i in 1..4 {
                             let x = l + (rr - l) * i as f32 / 4.0;
-                            rt.DrawLine(pt(x, cy - u * 0.6), pt(x, cy - if i == 2 { 0.0 } else { u * 0.2 }), &fg, 1.0 * s, None);
+                            rt.DrawLine(
+                                pt(x, cy - u * 0.6),
+                                pt(x, cy - if i == 2 { 0.0 } else { u * 0.2 }),
+                                &fg,
+                                1.0 * s,
+                                None,
+                            );
                         }
                     }
                     Btn::Tool(Tool::Pen) => icon("\u{E70F}", r, &fg),
@@ -1218,7 +1224,8 @@ impl Ov {
 
     // ---------------------------------------------------------------- input
     fn finish(&mut self, action: Action) {
-        let mut done = Done { action, img: None, rect: RECT::default(), text: String::new(), frame: self.frame, from_pin: false };
+        let mut done =
+            Done { action, img: None, rect: RECT::default(), text: String::new(), frame: self.frame, from_pin: false };
         if action == Action::CopyColor {
             let p = self.shot.img.get(self.mouse.0, self.mouse.1);
             done.text = format!("#{:06X}", p & 0xFF_FFFF);

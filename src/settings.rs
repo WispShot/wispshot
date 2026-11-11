@@ -649,10 +649,22 @@ impl St {
                 card(self, &mut y, t("capture.history"), &sub, 140.0, &mut body, &mut |st, r, h| {
                     st.toggle(rt, r, Tg::History, h)
                 });
-                let ages = [t("capture.age_never"), t("capture.age_day"), t("capture.age_week"), t("capture.age_month"), t("capture.age_3months")];
-                card(self, &mut y, t("capture.history_age"), t("capture.history_age_sub"), 400.0, &mut body, &mut |st, r, h| {
-                    st.seg(rt, r, Sg::HistoryDays, &ages, h)
-                });
+                let ages = [
+                    t("capture.age_never"),
+                    t("capture.age_day"),
+                    t("capture.age_week"),
+                    t("capture.age_month"),
+                    t("capture.age_3months"),
+                ];
+                card(
+                    self,
+                    &mut y,
+                    t("capture.history_age"),
+                    t("capture.history_age_sub"),
+                    400.0,
+                    &mut body,
+                    &mut |st, r, h| st.seg(rt, r, Sg::HistoryDays, &ages, h),
+                );
             }
             4 => {
                 let mut langs: Vec<&str> = vec![t("general.system")];
@@ -705,7 +717,12 @@ impl St {
                 card(self, &mut y, t("about.support"), t("about.support_sub"), 150.0, &mut body, &mut |st, r, h| {
                     let label = t("about.sponsor");
                     let bw = st.g.measure(label, &f.body).0 + 32.0;
-                    let b = rc(r.right - 18.0 - bw, (r.top + r.bottom) / 2.0 - 16.0, r.right - 18.0, (r.top + r.bottom) / 2.0 + 16.0);
+                    let b = rc(
+                        r.right - 18.0 - bw,
+                        (r.top + r.bottom) / 2.0 - 16.0,
+                        r.right - 18.0,
+                        (r.top + r.bottom) / 2.0 + 16.0,
+                    );
                     st.button(rt, b, label, Act::Sponsor, h);
                 });
             }
@@ -999,7 +1016,14 @@ impl St {
             }
             Act::OpenIni => open_ini(),
             Act::Sponsor => unsafe {
-                ShellExecuteW(None, w!("open"), w!("https://github.com/sponsors/efekaputlu"), None, None, SW_SHOWNORMAL);
+                ShellExecuteW(
+                    None,
+                    w!("open"),
+                    w!("https://github.com/sponsors/efekaputlu"),
+                    None,
+                    None,
+                    SW_SHOWNORMAL,
+                );
             },
             Act::ResetKeys => {
                 self.cfg.keys = DEFS.iter().map(|d| d.default.to_string()).collect();

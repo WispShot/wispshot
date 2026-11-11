@@ -116,8 +116,7 @@ fn render() {
             rt.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));
             let r = h as f32 / 2.0;
             let bar = D2D1_ROUNDED_RECT { rect: rc(0.5, 0.5, w as f32 - 0.5, h as f32 - 0.5), radiusX: r, radiusY: r };
-            if let (Ok(bg), Ok(edge), Ok(fg)) =
-                (brush(rt, 0xF01C_1C20), brush(rt, 0x30FF_FFFF), brush(rt, 0xFFF2_F2F2))
+            if let (Ok(bg), Ok(edge), Ok(fg)) = (brush(rt, 0xF01C_1C20), brush(rt, 0x30FF_FFFF), brush(rt, 0xFFF2_F2F2))
             {
                 rt.FillRoundedRectangle(&bar, &bg);
                 rt.DrawRoundedRectangle(&bar, &edge, 1.0, None);
@@ -151,10 +150,12 @@ fn render() {
 unsafe extern "system" fn proc_(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     match msg {
         WM_TIMER if wp.0 == TICK => {
-            let left = CD.with(|c| c.borrow_mut().as_mut().map(|c| {
-                c.left = c.left.saturating_sub(1);
-                c.left
-            }));
+            let left = CD.with(|c| {
+                c.borrow_mut().as_mut().map(|c| {
+                    c.left = c.left.saturating_sub(1);
+                    c.left
+                })
+            });
             if left == Some(0) {
                 let _ = KillTimer(Some(hwnd), TICK);
                 // off screen first, in case capture exclusion is not supported

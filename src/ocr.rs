@@ -16,7 +16,8 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 pub const WM_APP_OCR: u32 = WM_APP + 30;
 
-pub fn recognize(img: &Img) -> Result<String> {
+/// Run the engine; returns the result and the upscale factor used.
+fn run(img: &Img) -> Result<(OcrResult, i32)> {
     unsafe {
         let _ = RoInitialize(RO_INIT_MULTITHREADED);
     }
@@ -44,13 +45,39 @@ pub fn recognize(img: &Img) -> Result<String> {
     };
     let buf = CryptographicBuffer::CreateFromByteArray(src.as_bytes())?;
     let bmp = SoftwareBitmap::CreateCopyFromBuffer(&buf, BitmapPixelFormat::Bgra8, src.w, src.h)?;
-    let res = engine.RecognizeAsync(&bmp)?.join()?;
+    Ok((engine.RecognizeAsync(&bmp)?.join()?, f))
+}
+
+pub fn recognize(img: &Img) -> Result<String> {
+    let (res, _) = run(img)?;
     let mut out = String::new();
     for line in res.Lines()? {
         if !out.is_empty() {
             out.push_str("\r\n");
         }
         out.push_str(&line.Text()?.to_string_lossy());
+    }
+    Ok(out)
+}
+
+/// One recognised word and its box in `img` pixels (left, top, right, bottom).
+pub type Word = (String, [f32; 4]);
+
+/// The text line by line, word by word, with positions.
+pub fn lines(img: &Img) -> Result<Vec<Vec<Word>>> {
+    let (res, f) = run(img)?;
+    let f = f as f32;
+    let mut out = vec![];
+    for line in res.Lines()? {
+        let mut ws = vec![];
+        for w in line.Words()? {
+            let r = w.BoundingRect()?;
+            ws.push((
+                w.Text()?.to_string_lossy(),
+                [r.X / f, r.Y / f, (r.X + r.Width) / f, (r.Y + r.Height) / f],
+            ));
+        }
+        out.push(ws);
     }
     Ok(out)
 }

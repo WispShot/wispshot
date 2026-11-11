@@ -65,6 +65,8 @@ pek değişmez.
 - Tekerlekle kalınlık, imleçte anlık önizleme
 - `Ctrl` basılı tutarak herhangi bir çizimi ya da birkaçını birden taşıyın veya silin; metne çift tıklayıp yeniden düzenleyin
 - Sınırsız geri al ve yinele
+- **Hassas bilgileri gizleme** (`Ctrl+B`): e-posta, telefon, IBAN, kart numarası, T.C. kimlik no ve API
+  anahtarlarını Windows OCR ile bulup tek adımda bulanıklaştırır (sağlama hanesi denetimi sıradan sayılara dokunmaz)
 - **Kaydırmalı çekim**: seçili alanda uzun bir sayfayı kaydırın (ya da *Otomatik*e bırakın), tek bir uzun görüntü alın
 
 **Paylaşma**
@@ -148,6 +150,7 @@ Bunlar varsayılanlardır. Sabit tuşlar (`Esc`, `Enter`, oklar, `Delete` ve met
 | `Ctrl+O` | Seçimdeki metni kopyala (OCR) |
 | `Ctrl+R` | Seçili bölgeyi kaydet (video) |
 | `Ctrl+L` | Seçili bölgeyi kaydırarak çek |
+| `Ctrl+B` | Hassas bilgileri bulanıklaştır (e-posta, telefon, IBAN, kart, anahtar) |
 | `Ctrl+A` | İmlecin olduğu monitörü seç (tekrar: tüm monitörler) |
 | `R` `E` `A` `L` `P` `M` `T` `N` `X` `B` | Dikdörtgen, elips, ok, çizgi, kalem, fosforlu, metin, numaralı adım, mozaik, bulanıklık |
 | `Ctrl+Z` / `Ctrl+Y` | Geri al / yinele |

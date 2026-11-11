@@ -29,6 +29,7 @@ mod overlay;
 mod pin;
 mod record;
 mod recui;
+mod redact;
 mod scroll;
 mod selftest;
 mod session;

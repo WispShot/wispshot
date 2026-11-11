@@ -66,6 +66,7 @@ enum Btn {
     Tool(Tool),
     Undo,
     Redo,
+    Redact,
     Pin,
     Ocr,
     Record,
@@ -104,6 +105,7 @@ impl Btn {
             Btn::Redo => k(t("editor.redo"), K::Redo),
             Btn::Pin => k(t("editor.pin"), K::PinIt),
             Btn::Ocr => k(t("editor.ocr"), K::Ocr),
+            Btn::Redact => k(t("editor.redact"), K::Redact),
             Btn::Record => k(t("editor.record"), K::RecordArea),
             Btn::Scroll => k(t("editor.scroll"), K::ScrollCapture),
             Btn::Save => k(t("editor.save"), K::Save),
@@ -219,10 +221,16 @@ struct Ov {
     ready: bool,
     /// Briefly show the tool size next to the cursor after a wheel change.
     size_hint: bool,
+    /// A short message above the toolbar (sensitive-info search).
+    note: Option<String>,
+    redacting: bool,
 }
 
 const WM_APP_INIT: u32 = WM_APP + 11;
 const TIMER_SIZE_HINT: usize = 21;
+const TIMER_NOTE: usize = 22;
+/// Worker -> editor: boxes to blur (Box<Option<Vec<[f32; 4]>>> in LPARAM, None = OCR failed).
+const WM_APP_REDACT: u32 = WM_APP + 12;
 
 impl Drop for Ov {
     fn drop(&mut self) {
@@ -323,6 +331,8 @@ pub fn open(mode: Mode, magnifier: bool, deep: bool, veil: Option<HWND>) -> bool
             gdi: None,
             ready: false,
             size_hint: false,
+            note: None,
+            redacting: false,
         });
         let raw = Box::into_raw(ov);
         let hwnd = CreateWindowExW(
@@ -580,6 +590,7 @@ impl Ov {
             Some(Btn::Undo),
             Some(Btn::Redo),
             None,
+            Some(Btn::Redact),
             Some(Btn::Pin),
             Some(Btn::Ocr),
             Some(Btn::Record),
@@ -1056,6 +1067,7 @@ impl Ov {
                     Btn::Undo => icon("\u{E7A7}", r, if self.undo.is_empty() { &dis } else { &fg }),
                     Btn::Redo => icon("\u{E7A6}", r, if self.redo.is_empty() { &dis } else { &fg }),
                     Btn::Pin => icon("\u{E718}", r, &fg),
+                    Btn::Redact => icon("\u{EA18}", r, &fg),
                     Btn::Ocr => {
                         if let Ok(f) = self.g.text_format(9.5 * s, true) {
                             let _ = f.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
@@ -1164,6 +1176,9 @@ impl Ov {
                         DWRITE_MEASURING_MODE_NATURAL,
                     );
                 }
+            }
+            if let (Some(n), None) = (&self.note, self.tb_hover) {
+                self.label(rt, n, tb[0].0.left, main_top - 30.0 * s, false)?;
             }
             if let Some(h) = self.tb_hover {
                 if let Some((r, _)) = tb.iter().find(|(_, b)| *b == h) {
@@ -1432,10 +1447,82 @@ impl Ov {
         std::mem::replace(&mut self.hot, hot) != hot
     }
 
+    /// Look for e-mails, phone numbers, IBANs, card numbers, ID numbers and keys in the
+    /// selection (OCR on a worker thread) and blur what is found, as one undo step.
+    fn redact(&mut self) {
+        let Some(sel) = self.sel else { return };
+        if self.redacting {
+            return;
+        }
+        self.commit_text();
+        self.redacting = true;
+        self.set_note(t("redact.searching"), 0);
+        let crop = self.shot.img.crop(sel.left, sel.top, sel.right - sel.left, sel.bottom - sel.top);
+        let (hwnd, ox, oy) = (self.hwnd.0 as isize, sel.left as f32, sel.top as f32);
+        std::thread::spawn(move || {
+            let r = crate::ocr::lines(&crop).ok().map(|l| {
+                crate::redact::find(&l)
+                    .into_iter()
+                    .map(|b| [b[0] + ox - 3.0, b[1] + oy - 3.0, b[2] + ox + 3.0, b[3] + oy + 3.0])
+                    .collect::<Vec<_>>()
+            });
+            let p = Box::into_raw(Box::new(r));
+            unsafe {
+                if PostMessageW(Some(HWND(hwnd as *mut _)), WM_APP_REDACT, WPARAM(0), LPARAM(p as isize)).is_err() {
+                    drop(Box::from_raw(p));
+                }
+            }
+        });
+    }
+
+    fn redact_done(&mut self, found: Option<Vec<[f32; 4]>>) {
+        self.redacting = false;
+        let Some(found) = found else {
+            self.set_note(t("redact.no_ocr"), 3000);
+            return;
+        };
+        if found.is_empty() {
+            self.set_note(t("redact.none"), 2500);
+            return;
+        }
+        let Some(fx) = self.effect_of(1) else { return };
+        let sel = self.sel.unwrap_or(RECT { left: 0, top: 0, right: self.shot.img.w, bottom: self.shot.img.h });
+        let base = self.items.len();
+        let ops = found
+            .iter()
+            .enumerate()
+            .map(|(i, b)| {
+                let r = rc(
+                    b[0].max(sel.left as f32),
+                    b[1].max(sel.top as f32),
+                    b[2].min(sel.right as f32),
+                    b[3].min(sel.bottom as f32),
+                );
+                Op::Insert { idx: base + i, item: Item::Fx { fx: fx.clone(), shape: FxShape::Rect(r) } }
+            })
+            .collect();
+        self.exec(Op::Batch(ops));
+        self.set_note(&tf("redact.done", &[&found.len().to_string()]), 2500);
+    }
+
+    fn set_note(&mut self, text: &str, ms: u32) {
+        self.note = Some(text.to_string());
+        unsafe {
+            let _ = KillTimer(Some(self.hwnd), TIMER_NOTE);
+            if ms > 0 {
+                SetTimer(Some(self.hwnd), TIMER_NOTE, ms, None);
+            }
+        }
+    }
+
     /// The blur / mosaic image for the current tool, covering the selection.
     fn effect(&mut self) -> Option<Rc<Effect>> {
+        self.effect_of((self.tool == Tool::Blur) as usize)
+    }
+
+    /// 0: mosaic, 1: blur.
+    fn effect_of(&mut self, i: usize) -> Option<Rc<Effect>> {
         let sel = self.sel?;
-        let i = (self.tool == Tool::Blur) as usize;
         if let Some(f) = &self.fx[i] {
             if f.x <= sel.left && f.y <= sel.top && f.x + f.img.w >= sel.right && f.y + f.img.h >= sel.bottom {
                 return Some(f.clone());
@@ -1466,6 +1553,7 @@ impl Ov {
             Btn::Redo => self.redo(),
             Btn::Pin => self.finish(Action::Pin),
             Btn::Ocr => self.finish(Action::Ocr),
+            Btn::Redact => self.redact(),
             Btn::Record => self.finish(Action::Record),
             Btn::Scroll => self.finish(Action::Scroll),
             Btn::Save => self.finish(Action::Save),
@@ -1974,6 +2062,7 @@ impl Ov {
             K::Save => self.finish(Action::Save),
             K::PinIt => self.finish(Action::Pin),
             K::Ocr => self.finish(Action::Ocr),
+            K::Redact => self.redact(),
             K::RecordArea => self.finish(Action::Record),
             K::ScrollCapture => self.finish(Action::Scroll),
             K::Undo => self.undo(),
@@ -2192,6 +2281,18 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
         }
         WM_APP_INIT => {
             ov.init_d2d();
+            LRESULT(0)
+        }
+        WM_APP_REDACT => {
+            let r = *Box::from_raw(lp.0 as *mut Option<Vec<[f32; 4]>>);
+            ov.redact_done(r);
+            redraw(ov);
+            LRESULT(0)
+        }
+        WM_TIMER if wp.0 == TIMER_NOTE => {
+            let _ = KillTimer(Some(hwnd), TIMER_NOTE);
+            ov.note = None;
+            redraw(ov);
             LRESULT(0)
         }
         WM_TIMER if wp.0 == TIMER_SIZE_HINT => {

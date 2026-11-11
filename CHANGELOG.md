@@ -24,6 +24,10 @@
   `wispshot.ini`). Windows OCR reads the text in each one in the background, so the history window can search
   inside the pictures. Click copies, double-click pins, right-click offers copy as file, show in folder and
   delete. Nothing is kept while the history is off.
+- Hide sensitive info (`Ctrl+B` or the shield button in the editor): Windows OCR reads the selection and every
+  e-mail address, phone number, IBAN, card number, Turkish ID number (T.C. kimlik no) and API key or token is
+  blurred, as one undo step. IBANs, cards and ID numbers must pass their checksum, so amounts, dates and order
+  numbers stay as they are.
 
 ## [0.2.1] - 2026-11-11
 

@@ -64,6 +64,8 @@ times how long it takes until the screen visibly changes. Your numbers will diff
 - Scroll to change the width, with a live preview at the cursor
 - Hold `Ctrl` to move or delete any drawing, or several at once; double-click text to edit it again
 - Unlimited undo and redo
+- **Hide sensitive info** (`Ctrl+B`): finds e-mail addresses, phone numbers, IBANs, card numbers, ID numbers
+  and API keys with Windows OCR and blurs them in one step (checksums keep ordinary numbers untouched)
 - **Scrolling capture**: scroll a long page inside the selected area (or let *Auto* do it) and get one tall image
 
 **Share**
@@ -147,6 +149,7 @@ can be changed under *Settings > Shortcuts*.
 | `Ctrl+O` | Copy the text in the selection (OCR) |
 | `Ctrl+R` | Record the selected area |
 | `Ctrl+L` | Scrolling capture of the selected area |
+| `Ctrl+B` | Blur sensitive info (e-mail, phone, IBAN, card, key) |
 | `Ctrl+A` | Select the current monitor (again: all monitors) |
 | `R` `E` `A` `L` `P` `M` `T` `N` `X` `B` | Rectangle, ellipse, arrow, line, pen, highlighter, text, numbered step, pixelate, blur |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo |

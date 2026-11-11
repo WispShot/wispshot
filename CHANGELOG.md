@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-11
+
 ### Added
 
 - Select several drawings in the editor and move or delete them together: `Ctrl` + click adds or removes one,
@@ -23,14 +25,15 @@
   captures are kept in `%LOCALAPPDATA%\WispShot\history` (the last 100, at most 500 MB, both adjustable in
   `wispshot.ini`). Windows OCR reads the text in each one in the background, so the history window can search
   inside the pictures. Click copies, double-click pins, right-click offers copy as file, show in folder and
-  delete. Nothing is kept while the history is off.
+  delete. Nothing is kept while the history is off. *Delete old captures* removes the ones older than a day, a
+  week, a month or three months, also when the history has been turned off since.
 - Hide sensitive info (`Ctrl+B` or the shield button in the editor): Windows OCR reads the selection and every
   e-mail address, phone number, IBAN, card number, Turkish ID number (T.C. kimlik no) and API key or token is
   blurred, as one undo step. IBANs, cards and ID numbers must pass their checksum, so amounts, dates and order
   numbers stay as they are.
 - Share frame (*Settings > Screenshots*): copied and saved screenshots get a margin, rounded corners and a soft
   shadow on a color, light or dark background. `F` in the editor switches it for one capture.
-- A *Support WispShot* card with a Sponsor button on *Settings > About*.
+- A *Support WispShot* card with a Sponsor button on *Settings > About*, and *Support WispShot* in the tray menu.
 - Ruler tool (`U`): a line labelled with its length in pixels (and width × height when it is diagonal).
 
 ## [0.2.1] - 2026-11-11

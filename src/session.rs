@@ -283,7 +283,7 @@ fn handle_done() {
         }
         Action::Upload => {
             if let Some(img) = done.img.as_ref().map(framed) {
-                upload(app, &img, &cfg);
+                upload(app, &img);
             }
         }
         Action::Record => start_recording(done.rect, &cfg),
@@ -328,15 +328,18 @@ fn handle_done() {
 pub fn confirm_upload(owner: HWND) -> bool {
     use crate::upload::Host;
     use windows::Win32::UI::WindowsAndMessaging::*;
-    let mut now = config::load();
-    if now.upload_asked || (now.upload_host == Host::Custom && now.upload_url.is_empty()) {
+    let now = config::load();
+    if now.upload_host == Host::Custom && now.upload_url.is_empty() {
+        notify(t("upload.failed"), t("upload.no_url"));
+        return false;
+    }
+    if now.upload_asked {
         return true;
     }
     let host = now.upload_host;
     let keep = if host.hours() > 0 { tf("upload.keep_hours", &[&host.hours().to_string()]) } else { String::new() };
     let body = output::wide(&tf("upload.confirm", &[&host.site(&now.upload_url), &keep]));
     let title = output::wide(t("upload.confirm_title"));
-    with(|s| s.dialog = true);
     let r = unsafe {
         MessageBoxW(
             Some(owner),
@@ -345,21 +348,27 @@ pub fn confirm_upload(owner: HWND) -> bool {
             MB_YESNO | MB_ICONINFORMATION | MB_TOPMOST | MB_SETFOREGROUND,
         )
     };
-    with(|s| s.dialog = false);
     if r != IDYES {
         return false;
     }
+    // remember it in the ini as it is now (Settings may have changed it while the question was open)
+    let mut now = config::load();
     now.upload_asked = true;
     let _ = config::save(&now);
-    with(|s| s.cfg.upload_asked = true);
     true
 }
 
-fn upload(app: HWND, img: &crate::img::Img, cfg: &Config) {
+/// Sends the capture with the upload settings as they are now (the session's copy may be
+/// older than what the user just confirmed). Never sends before the user said yes once.
+fn upload(app: HWND, img: &crate::img::Img) {
     use crate::upload::Host;
+    let cfg = config::load();
     let host = cfg.upload_host;
     if host == Host::Custom && cfg.upload_url.is_empty() {
         notify(t("upload.failed"), t("upload.no_url"));
+        return;
+    }
+    if !cfg.upload_asked {
         return;
     }
     let site = host.site(&cfg.upload_url);

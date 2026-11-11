@@ -240,6 +240,8 @@ const TIMER_SIZE_HINT: usize = 21;
 const TIMER_NOTE: usize = 22;
 /// Worker -> editor: boxes to blur (Box<Option<Vec<[f32; 4]>>> in LPARAM, None = OCR failed).
 const WM_APP_REDACT: u32 = WM_APP + 12;
+/// Upload pressed: the first-use question runs from here, with no borrow of the editor held.
+const WM_APP_ASK_UPLOAD: u32 = WM_APP + 13;
 /// What the redaction worker sends back: the selection it searched and the boxes it found.
 type RedactMsg = (RECT, Option<Vec<[f32; 4]>>);
 
@@ -1230,8 +1232,10 @@ impl Ov {
     // ---------------------------------------------------------------- input
     /// The first upload asks before anything leaves the PC; "No" stays in the editor.
     fn upload(&mut self) {
-        if self.sel.or(self.hover).is_some() && crate::session::confirm_upload(self.hwnd) {
-            self.finish(Action::Upload);
+        if self.sel.or(self.hover).is_some() {
+            unsafe {
+                let _ = PostMessageW(Some(self.hwnd), WM_APP_ASK_UPLOAD, WPARAM(0), LPARAM(0));
+            }
         }
     }
 
@@ -2286,6 +2290,22 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
     let p = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut Ov;
     if p.is_null() {
         return DefWindowProcW(hwnd, msg, wp, lp);
+    }
+    if msg == WM_APP_ASK_UPLOAD {
+        // the question's modal loop sends this window messages: hold no &mut Ov across it
+        if (*p).closing {
+            return LRESULT(0);
+        }
+        let ok = crate::session::confirm_upload(hwnd);
+        let p = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut Ov;
+        if ok && !p.is_null() && !(*p).closing {
+            let ov = &mut *p;
+            ov.finish(Action::Upload);
+            if IsWindow(Some(hwnd)).as_bool() {
+                let _ = InvalidateRect(Some(hwnd), None, false);
+            }
+        }
+        return LRESULT(0);
     }
     let ov = &mut *p;
     if ov.closing && msg != WM_CLOSE && msg != WM_NCDESTROY && msg != WM_DESTROY {

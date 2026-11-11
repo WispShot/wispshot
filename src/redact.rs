@@ -80,7 +80,16 @@ fn is_token(w: &str) -> bool {
         return false;
     }
     // a file name (report_2026_Final.docx) is not a secret
-    if w.rsplit_once('.').is_some_and(|(_, ext)| (1..=5).contains(&ext.len()) && ext.chars().all(|c| c.is_ascii_alphabetic())) {
+    let ext = |e: &str| {
+        (1..=5).contains(&e.len())
+            && e.chars().all(|c| c.is_ascii_alphanumeric())
+            && e.chars().any(|c| c.is_ascii_alphabetic())
+    };
+    if w.rsplit_once('.').is_some_and(|(_, e)| ext(e)) {
+        return false;
+    }
+    // a link without its scheme (gitlab.com/org/repo/...)
+    if w.split_once('/').is_some_and(|(host, _)| host.contains('.') && host.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-'))) {
         return false;
     }
     let digits = w.chars().filter(|c| c.is_ascii_digit()).count();
@@ -95,8 +104,8 @@ fn is_token(w: &str) -> bool {
 }
 
 /// Digit runs across words (with spaces, dashes, dots, parentheses): cards, IDs, phones.
-/// When a whole run is not one, its words are tried on their own, so a number
-/// next to another one ("TC: 10000000146 1500 TL") is still found.
+/// When a whole run is not one, shorter stretches of its words are tried, so a number
+/// next to another one ("TC: 10000000146 1500 TL", a card and its CVV) is still found.
 fn numbers(s: &[char]) -> Vec<(usize, usize)> {
     let mut out = vec![];
     let mut i = 0;
@@ -116,17 +125,23 @@ fn numbers(s: &[char]) -> Vec<(usize, usize)> {
             j += 1;
         }
         let end = last_digit + 1;
-        // the run's words (space separated), tried one by one when the whole run is no number
-        if is_number(&s[start..end]) {
-            out.push((start, end));
-        } else {
-            let mut a = start;
-            for word in s[start..end].split(|&c| c == ' ') {
-                let b = a + word.len();
-                if b - a < end - start && is_number(word) {
-                    out.push((a, b));
+        // the whole run, or else the longest stretch of its words that is a number
+        let mut words = vec![];
+        let mut a = start;
+        for word in s[start..end].split(|&c| c == ' ') {
+            if !word.is_empty() {
+                words.push((a, a + word.len()));
+            }
+            a += word.len() + 1;
+        }
+        let mut w = 0;
+        while w < words.len() {
+            match (w..words.len()).rev().find(|&e| is_number(&s[words[w].0..words[e].1])) {
+                Some(e) => {
+                    out.push((words[w].0, words[e].1));
+                    w = e + 1;
                 }
-                a = b + 1;
+                None => w += 1,
             }
         }
         i = end.max(i + 1);
@@ -194,9 +209,13 @@ fn phone(run: &str, d: &[u8]) -> bool {
     if seen.iter().filter(|&&b| b).count() < 4 || run.starts_with("0.") || run.starts_with("0,") {
         return false;
     }
-    // a date in front (01.02.2026 1234)
+    // a date in front (01.02.2026 1234, 01.02.26 123456)
     let g = groups(run);
-    if g.len() >= 3 && g[0] <= 2 && g[1] <= 2 && g[2] == 4 {
+    if g.len() >= 3 && g[0] <= 2 && g[1] <= 2 && (g[2] == 4 || g[2] == 2) {
+        return false;
+    }
+    // blocks of four are card or account digits, not a phone
+    if g.len() >= 3 && g.iter().all(|&n| n == 4) {
         return false;
     }
     // +country, a leading 0 or an area code in parentheses: written like a phone
@@ -294,6 +313,8 @@ mod tests {
         assert_eq!(hidden(&["ghp_a1B2c3D4e5F6g7H8i9J0"]).len(), 1);
         assert_eq!(hidden(&["Xk9mQ2vL7pR4tW8zB3nH6jF1"]).len(), 1);
         assert_eq!(hidden(&["3782", "822463", "10005"]).len(), 1); // Amex test number
+        assert_eq!(hidden(&["Kart:", "4111", "1111", "1111", "1111", "500", "TL"]), vec![[10.0, 0.0, 48.0, 10.0]]);
+        assert_eq!(hidden(&["0532", "123", "45", "67", "2026"]), vec![[0.0, 0.0, 38.0, 10.0]]);
     }
 
     #[test]
@@ -311,5 +332,8 @@ mod tests {
         assert!(hidden(&["0.0000000001"]).is_empty());
         assert!(hidden(&["+1000000000"]).is_empty());
         assert!(hidden(&["01.02.2026", "1234"]).is_empty());
+        assert!(hidden(&["01.02.26", "123456"]).is_empty());
+        assert!(hidden(&["Scan_2026_a1B2c3D4e5F6.mp4"]).is_empty());
+        assert!(hidden(&["gitlab.com/org/repo/commit/a1B2c3D4e5F6g7H8"]).is_empty());
     }
 }

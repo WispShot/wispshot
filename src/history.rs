@@ -266,23 +266,7 @@ pub fn open() -> bool {
         };
         let light = crate::traymenu::light_theme(false);
         let p = pal(light);
-        let face = wide("Segoe UI");
-        let font = CreateFontW(
-            -((14.0 * k) as i32),
-            0,
-            0,
-            0,
-            400,
-            0,
-            0,
-            0,
-            DEFAULT_CHARSET,
-            OUT_DEFAULT_PRECIS,
-            CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY,
-            0,
-            PCWSTR(face.as_ptr()),
-        );
+        let font = edit_font(k);
         let edit = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             w!("EDIT"),
@@ -341,6 +325,29 @@ fn bgr(c: u32) -> u32 {
 
 fn k() -> f32 {
     with(|s| s.dpi as f32 / 96.0).unwrap_or(1.0)
+}
+
+/// The search box font for a DPI scale.
+fn edit_font(k: f32) -> HFONT {
+    let face = wide("Segoe UI");
+    unsafe {
+        CreateFontW(
+            -((14.0 * k) as i32),
+            0,
+            0,
+            0,
+            400,
+            0,
+            0,
+            0,
+            DEFAULT_CHARSET,
+            OUT_DEFAULT_PRECIS,
+            CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY,
+            0,
+            PCWSTR(face.as_ptr()),
+        )
+    }
 }
 
 fn place_edit() {
@@ -417,7 +424,7 @@ impl Hs {
             let (mut w, mut h) = (0, 0);
             fr.GetSize(&mut w, &mut h).ok()?;
             let k = self.dpi as f32 / 96.0;
-            let z = ((TW * k) / w as f32).min((TH * k) / h as f32).min(1.0);
+            let z = ((TW * k) / w as f32).min(((TH - 12.0) * k) / h as f32).min(k);
             let (tw, th) = (((w as f32 * z) as u32).max(1), ((h as f32 * z) as u32).max(1));
             let sc = f.CreateBitmapScaler().ok()?;
             sc.Initialize(&fr, tw, th, WICBitmapInterpolationModeFant).ok()?;
@@ -435,6 +442,12 @@ impl Hs {
             };
             rt.CreateBitmapFromWicBitmap(&conv, Some(&props)).ok()
         }
+    }
+
+    /// Thumbnails belong to the render target, so they go first.
+    fn drop_rt(&mut self) {
+        self.items.iter_mut().for_each(|it| it.thumb = None);
+        self.rt = None;
     }
 
     fn ensure_rt(&mut self) -> Option<()> {
@@ -568,7 +581,7 @@ impl Hs {
                 txt(rt, m, &fb, rc(r.left + 16.0, r.top + 7.0, r.right, r.bottom), p.bg);
             }
             if rt.EndDraw(None, None).is_err() {
-                self.rt = None;
+                self.drop_rt();
             }
         }
     }
@@ -864,9 +877,10 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
         WM_DPICHANGED => {
             with(|s| {
                 s.dpi = (wp.0 & 0xFFFF) as u32;
-                // thumbnails belong to the render target: drop them first
-                s.items.iter_mut().for_each(|it| it.thumb = None);
-                s.rt = None;
+                s.drop_rt();
+                let font = edit_font(s.dpi as f32 / 96.0);
+                SendMessageW(s.edit, WM_SETFONT, Some(WPARAM(font.0 as usize)), Some(LPARAM(1)));
+                let _ = DeleteObject(std::mem::replace(&mut s.font, font).into());
             });
             let r = &*(lp.0 as *const RECT);
             let _ = SetWindowPos(hwnd, None, r.left, r.top, r.right - r.left, r.bottom - r.top, SWP_NOZORDER);
@@ -875,8 +889,8 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
         }
         WM_DESTROY => {
             if let Some(mut s) = HS.with(|h| h.borrow_mut().take()) {
+                s.drop_rt();
                 s.items.clear();
-                s.rt = None;
                 let _ = DeleteObject(s.font.into());
                 let _ = DeleteObject(s.edit_bg.into());
             }

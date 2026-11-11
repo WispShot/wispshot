@@ -40,6 +40,7 @@ editor.pin = Ekrana sabitle
 editor.ocr = Metni kopyala (OCR)
 editor.record = Bu alanı kaydet
 editor.scroll = Kaydırmalı çekim
+editor.upload = Yükle ve linki kopyala
 editor.redact = E-posta, numara ve anahtarları bulanıklaştır
 editor.save = Kaydet
 editor.copy_file = Dosya olarak kopyala

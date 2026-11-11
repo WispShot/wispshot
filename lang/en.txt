@@ -41,6 +41,7 @@ editor.pin = Pin to screen
 editor.ocr = Copy text (OCR)
 editor.record = Record this area
 editor.scroll = Scrolling capture
+editor.upload = Upload and copy the link
 editor.redact = Blur e-mails, numbers and keys
 editor.save = Save
 editor.copy_file = Copy as file

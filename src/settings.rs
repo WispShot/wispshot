@@ -67,6 +67,9 @@ enum Act {
     OpenDir(bool),
     OpenIni,
     ResetKeys,
+    /// Add a program whose own keys win over the shortcuts (`pause_in_apps`).
+    AddApp,
+    RemoveApp(usize),
     Sponsor,
 }
 
@@ -558,6 +561,34 @@ impl St {
                     &mut body,
                     &mut |st, r, h| st.toggle(rt, r, Tg::PauseFs, h),
                 );
+                // programs that keep their own keys, with their list right under the card
+                let bw = self.g.measure(t("keys.apps_add"), &f.body).0 + 32.0;
+                card(self, &mut y, t("keys.apps"), t("keys.apps_sub"), bw + 40.0, &mut body, &mut |st, r, h| {
+                    let cy = (r.top + r.bottom) / 2.0;
+                    st.button(
+                        rt,
+                        rc(r.right - 18.0 - bw, cy - 16.0, r.right - 18.0, cy + 16.0),
+                        t("keys.apps_add"),
+                        Act::AddApp,
+                        h,
+                    );
+                });
+                let apps = &self.cfg.pause_apps;
+                if !apps.is_empty() {
+                    let rh = 42.0;
+                    rrect(rt, rc(x0, y, x1, y + rh * apps.len() as f32), 6.0, p.card, p.card_border);
+                    let rw = self.g.measure(t("keys.apps_remove"), &f.body).0 + 28.0;
+                    for (i, a) in apps.iter().enumerate() {
+                        if i > 0 {
+                            rrect(rt, rc(x0 + 1.0, y, x1 - 1.0, y + 1.0), 0.0, p.divider, 0);
+                        }
+                        txt(rt, a, &f.body, rc(x0 + 18.0, y, x1 - rw - 40.0, y + rh), p.text);
+                        let b = rc(x1 - 18.0 - rw, y + 7.0, x1 - 18.0, y + rh - 7.0);
+                        self.button(rt, b, t("keys.apps_remove"), Act::RemoveApp(i), &mut body);
+                        y += rh;
+                    }
+                    y += 4.0;
+                }
                 txt(rt, t("keys.how_to"), &f.sub, rc(x0 + 4.0, y + 2.0, x1, y + 26.0), p.sub);
                 y += 30.0;
                 for (scope, title) in GROUPS {
@@ -1018,7 +1049,13 @@ impl St {
                 }
                 self.commit(t("settings.saved"));
             }
-            Act::Browse(_) => {} // handled in wndproc: the dialog must not run inside a borrow
+            Act::Browse(_) | Act::AddApp => {} // handled in wndproc: menus and dialogs must not run inside a borrow
+            Act::RemoveApp(i) => {
+                if i < self.cfg.pause_apps.len() {
+                    let name = self.cfg.pause_apps.remove(i);
+                    self.commit(&tf("keys.apps_removed", &[&name]));
+                }
+            }
             Act::OpenDir(video) => {
                 crate::open_path(if video { &self.cfg.video_dir } else { &self.cfg.save_dir }, false)
             }
@@ -1140,6 +1177,90 @@ fn browse(owner: HWND, cur: &std::path::Path) -> Option<std::path::PathBuf> {
     }
 }
 
+/// Programs that should never be paused for: the shell's hosts stand for many apps at once.
+const NOT_AN_APP: [&str; 4] =
+    ["applicationframehost.exe", "textinputhost.exe", "shellexperiencehost.exe", "searchhost.exe"];
+
+/// A menu of the programs with a window open now, plus "Browse...". Returns an exe name.
+fn pick_app(owner: HWND) -> Option<String> {
+    unsafe extern "system" fn each(h: HWND, lp: LPARAM) -> BOOL {
+        let found = &mut *(lp.0 as *mut Vec<(String, String)>);
+        let ex = GetWindowLongW(h, GWL_EXSTYLE) as u32;
+        if !IsWindowVisible(h).as_bool()
+            || ex & WS_EX_TOOLWINDOW.0 != 0
+            || GetWindow(h, GW_OWNER).map(|o| !o.is_invalid()).unwrap_or(false)
+            || crate::capture::is_cloaked(h)
+        {
+            return true.into();
+        }
+        let mut buf = [0u16; 256];
+        let n = GetWindowTextW(h, &mut buf) as usize;
+        let title = String::from_utf16_lossy(&buf[..n]);
+        if title.trim().is_empty() {
+            return true.into();
+        }
+        if let Some(exe) = crate::window_exe(h) {
+            if !NOT_AN_APP.contains(&exe.as_str()) && !found.iter().any(|(e, _)| *e == exe) {
+                found.push((exe, title));
+            }
+        }
+        true.into()
+    }
+    const BROWSE: usize = 0xFFFF;
+    let mut found: Vec<(String, String)> = vec![];
+    unsafe {
+        let _ = EnumWindows(Some(each), LPARAM(&mut found as *mut _ as isize));
+        found.sort();
+        let menu = CreatePopupMenu().ok()?;
+        for (i, (exe, title)) in found.iter().enumerate() {
+            let title: String = if title.chars().count() > 48 {
+                title.chars().take(47).chain(Some('…')).collect()
+            } else {
+                title.clone()
+            };
+            let w = output::wide(&format!("{}\t{}", title.replace('&', "&&"), exe));
+            let _ = AppendMenuW(menu, MF_STRING, i + 1, PCWSTR(w.as_ptr()));
+        }
+        if !found.is_empty() {
+            let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
+        }
+        let w = output::wide(t("keys.apps_browse"));
+        let _ = AppendMenuW(menu, MF_STRING, BROWSE, PCWSTR(w.as_ptr()));
+        let mut pt = POINT::default();
+        let _ = GetCursorPos(&mut pt);
+        let cmd = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, None, owner, None).0 as usize;
+        let _ = DestroyMenu(menu);
+        match cmd {
+            0 => None,
+            BROWSE => browse_exe(owner),
+            i => found.get(i - 1).map(|(e, _)| e.clone()),
+        }
+    }
+}
+
+/// File picker for a program (.exe); returns its lowercase file name.
+fn browse_exe(owner: HWND) -> Option<String> {
+    unsafe {
+        let dlg = CoCreateInstance::<_, IFileOpenDialog>(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
+        let name = output::wide(t("keys.apps_programs"));
+        let spec = [windows::Win32::UI::Shell::Common::COMDLG_FILTERSPEC {
+            pszName: PCWSTR(name.as_ptr()),
+            pszSpec: w!("*.exe"),
+        }];
+        let _ = dlg.SetFileTypes(&spec);
+        if let Ok(o) = dlg.GetOptions() {
+            let _ = dlg.SetOptions(o | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST);
+        }
+        dlg.Show(Some(owner)).ok()?;
+        let it = dlg.GetResult().ok()?;
+        let p = it.GetDisplayName(SIGDN_FILESYSPATH).ok()?;
+        let s = p.to_string().ok();
+        CoTaskMemFree(Some(p.0 as *const _));
+        let s = s?;
+        Some(s.rsplit(['\\', '/']).next().unwrap_or(&s).to_lowercase())
+    }
+}
+
 /// Open wispshot.ini with the default .ini handler (notepad.exe is deliberately not launched).
 fn open_ini() {
     let path = config::ini_path();
@@ -1251,6 +1372,18 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
                                 s.cfg.save_dir = p;
                             }
                             s.commit(t("settings.folder_changed"));
+                        });
+                    }
+                }
+                Some(Act::AddApp) if pressed == h => {
+                    if let Some(name) = pick_app(hwnd) {
+                        with(|s| {
+                            if s.cfg.pause_apps.contains(&name) {
+                                s.show_toast(&tf("keys.apps_already", &[&name]), false);
+                            } else {
+                                s.cfg.pause_apps.push(name.clone());
+                                s.commit(&tf("keys.apps_added", &[&name]));
+                            }
                         });
                     }
                 }

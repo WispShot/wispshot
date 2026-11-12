@@ -4,10 +4,11 @@
 
 ### Added
 
-- Pause the shortcuts in chosen programs: `[hotkeys] pause_in_apps = saplogon.exe, excel.exe`. While one of them is
-  in front, its own keys (SAP uses F1, F3 and Shift+F1, which are also WispShot's defaults) go to it, and the
-  shortcuts come back as soon as you switch away. The tray icon shows the program they are paused for. A screenshot
-  is still a click on the tray icon away.
+- Pause the shortcuts in chosen programs (*Settings > Shortcuts > Programs that keep their own keys*, or
+  `[hotkeys] pause_in_apps = saplogon.exe, excel.exe`). While one of them is in front, its own keys (SAP uses F1,
+  F3 and Shift+F1, which are also WispShot's defaults) go to it, and the shortcuts come back as soon as you switch
+  away. *Add program* lists the programs that have a window open, or finds the program file. The tray icon shows
+  the program they are paused for. A screenshot is still a click on the tray icon away.
 
 ### Fixed
 

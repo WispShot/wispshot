@@ -182,7 +182,7 @@ pub fn fill_children(list: &mut [(isize, RECT, Vec<RECT>)], ox: i32, oy: i32) {
     }
 }
 
-fn is_cloaked(h: HWND) -> bool {
+pub(crate) fn is_cloaked(h: HWND) -> bool {
     let mut cloaked: u32 = 0;
     unsafe { DwmGetWindowAttribute(h, DWMWA_CLOAKED, &mut cloaked as *mut _ as *mut _, 4).is_ok() && cloaked != 0 }
 }

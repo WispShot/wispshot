@@ -482,9 +482,14 @@ fn check_fullscreen() {
 
 /// The exe name of the foreground window's program, lowercase ("saplogon.exe").
 fn foreground_exe() -> Option<String> {
+    window_exe(unsafe { GetForegroundWindow() })
+}
+
+/// The exe name of a window's program, lowercase; None for our own windows.
+pub(crate) fn window_exe(hwnd: HWND) -> Option<String> {
     unsafe {
         let mut pid = 0u32;
-        GetWindowThreadProcessId(GetForegroundWindow(), Some(&mut pid));
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
         if pid == 0 || pid == GetCurrentProcessId() {
             return None;
         }

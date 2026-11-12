@@ -1003,15 +1003,20 @@ impl St {
         y + h + 4.0
     }
 
-    /// The saved programs: icon, name, the shortcuts left to each, Remove; returns the new y.
+    /// The saved programs: icon, name and Remove, then one line per shortcut with a switch:
+    /// on, the key goes to the program while it is in front; returns the new y.
     fn draw_apps(&self, rt: &ID2D1RenderTarget, mut y: f32, hits: &mut Hits) -> f32 {
         let Some(f) = &self.f else { return y };
         let p = &self.p;
         let (x0, x1) = (NAV_W + 32.0, W - 32.0);
-        let rh = 76.0;
+        let (head, line, pad) = (64.0, 32.0, 8.0);
+        let bound: Vec<K> = TRAY_KEYS.iter().copied().filter(|k| !keys::display(self.cfg.key(*k)).is_empty()).collect();
+        let rh = head + line * bound.len() as f32 + pad;
         let apps = &self.cfg.pause_apps;
         rrect(rt, rc(x0, y, x1, y + rh * apps.len() as f32), 6.0, p.card, p.card_border);
         let rw = self.g.measure(t("keys.apps_remove"), &f.body).0 + 28.0;
+        let key_w =
+            bound.iter().map(|k| self.g.measure(&keys::display(self.cfg.key(*k)), &f.sub).0).fold(0.0, f32::max) + 20.0;
         for (i, a) in apps.iter().enumerate() {
             if i > 0 {
                 rrect(rt, rc(x0 + 1.0, y, x1 - 1.0, y + 1.0), 0.0, p.divider, 0);
@@ -1024,29 +1029,34 @@ impl St {
             txt(rt, name, &f.body, rc(x0 + 54.0, y + 8.0, x1 - rw - 40.0, y + 32.0), p.text);
             let b = rc(x1 - 18.0 - rw, y + 8.0, x1 - 18.0, y + 36.0);
             self.button(rt, b, t("keys.apps_remove"), Act::RemoveApp(i), hits);
-            // the shortcuts this program keeps: lit chips
-            let lead = t("keys.apps_keys");
-            let lw = self.g.measure(lead, &f.sub).0;
-            txt(rt, lead, &f.sub, rc(x0 + 54.0, y + 42.0, x0 + 60.0 + lw, y + 66.0), p.sub);
-            let mut cx = x0 + 62.0 + lw;
-            for k in TRAY_KEYS {
-                let label = keys::display(self.cfg.key(k));
-                if label.is_empty() {
-                    continue;
-                }
-                let cw = self.g.measure(&label, &f.sub).0 + 20.0;
-                let r = rc(cx, y + 42.0, cx + cw, y + 66.0);
+            txt(rt, t("keys.apps_keys"), &f.sub, rc(x0 + 54.0, y + 38.0, x1 - 18.0, y + 60.0), p.sub);
+            // one line per shortcut: what it does, its key, and a switch "give it to the program"
+            let mut ly = y + head;
+            for k in &bound {
+                let k = *k;
                 let act = Act::AppKey(i, k);
-                if a.pauses(k) {
-                    rrect(rt, r, 12.0, p.accent, 0);
-                    txt(rt, &label, &f.sub, rc(r.left + 10.0, r.top, r.right, r.bottom), p.on_accent);
-                } else {
-                    let bg = if self.hover == Some(act) { p.btn_hover } else { p.btn };
-                    rrect(rt, r, 12.0, bg, p.btn_border);
-                    txt(rt, &label, &f.sub, rc(r.left + 10.0, r.top, r.right, r.bottom), p.text);
+                let r = rc(x0 + 46.0, ly, x1 - 12.0, ly + line);
+                if self.hover == Some(act) {
+                    rrect(rt, r, 4.0, p.hover, 0);
                 }
+                let given = a.pauses(k);
+                let sw = rc(r.right - 6.0 - 36.0, r.top + 7.0, r.right - 6.0, r.bottom - 7.0);
+                let cy = (sw.top + sw.bottom) / 2.0;
+                if given {
+                    rrect(rt, sw, 8.0, p.accent, 0);
+                    circle(rt, sw.right - 8.0, cy, 5.0, p.on_accent);
+                } else {
+                    rrect(rt, sw, 8.0, 0, p.off_border);
+                    circle(rt, sw.left + 8.0, cy, 4.0, p.off_border);
+                }
+                let label = keys::display(self.cfg.key(k));
+                let cap = rc(sw.left - 14.0 - key_w, r.top + 4.0, sw.left - 14.0, r.bottom - 4.0);
+                rrect(rt, cap, 4.0, p.btn, p.btn_border);
+                let lw = self.g.measure(&label, &f.sub).0;
+                txt(rt, &label, &f.sub, rc((cap.left + cap.right - lw) / 2.0, cap.top, cap.right, cap.bottom), p.text);
+                txt(rt, t(label_key(k)), &f.sub, rc(r.left + 8.0, r.top, cap.left - 10.0, r.bottom), p.text);
                 hits.push((r, act));
-                cx += cw + 6.0;
+                ly += line;
             }
             y += rh;
         }

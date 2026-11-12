@@ -640,6 +640,11 @@ pub fn notify(title: &str, text: &str) {
     }
 }
 
+/// An upload link as a notice may open it: http(s), one word, no quotes.
+fn is_link(s: &str) -> bool {
+    (s.starts_with("https://") || s.starts_with("http://")) && !s.chars().any(|c| c == '"' || c.is_whitespace())
+}
+
 /// `wispshot.exe --update check|install` in its own process (WinHTTP stays out of the tray).
 fn spawn_update(what: &str) {
     if let Ok(exe) = std::env::current_exe() {
@@ -1126,7 +1131,14 @@ unsafe extern "system" fn app_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                     }
                     tray(NIM_MODIFY);
                 }
-                IPC_LAST_FILE => {
+                // what a click on the next notice opens: only an upload link or a file that exists
+                // (any program on the desktop can send this message)
+                IPC_LAST_FILE
+                    if is_link(&s) || {
+                        let p = std::path::Path::new(&s);
+                        p.is_absolute() && !s.contains('"') && p.exists()
+                    } =>
+                {
                     with(|st| st.last_file = Some(PathBuf::from(&s)));
                 }
                 IPC_HOTKEYS => {

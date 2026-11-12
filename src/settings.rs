@@ -28,6 +28,10 @@ const H: f32 = 600.0;
 const NAV_W: f32 = 232.0;
 /// Page content scrolls below the fixed page title.
 const VIEW_TOP: f32 = 76.0;
+/// The Shortcuts page also keeps its row of section buttons fixed under the title.
+const JUMP_H: f32 = 40.0;
+/// Sections of the Shortcuts page, for the jump bar (i18n keys).
+const JUMPS: [&str; 5] = ["keys.jump_apps", "keys.jump_global", "keys.jump_editor", "keys.jump_draw", "keys.jump_pin"];
 const TIMER_TOAST: usize = 1;
 const KBD_KEY: PCWSTR = w!("Control Panel\\Keyboard");
 const SNIP_VALUE: PCWSTR = w!("PrintScreenKeyForSnippingEnabled");
@@ -140,8 +144,12 @@ enum Act {
     PickApp(usize),
     BrowseApp,
     CancelPick,
-    /// Whether shortcut K stays with program i.
+    /// Whether shortcut K is off while program i is in front.
     AppKey(usize, K),
+    /// Show or hide the shortcut lines of program i.
+    OpenApp(usize),
+    /// Scroll to a section of the Shortcuts page.
+    Jump(usize),
     CheckUpdates,
     Sponsor,
 }
@@ -237,6 +245,8 @@ struct Fonts {
     body: IDWriteTextFormat,
     body_b: IDWriteTextFormat,
     sub: IDWriteTextFormat,
+    /// Small text that wraps onto more lines (from the top of its box).
+    wrap: IDWriteTextFormat,
     path: IDWriteTextFormat,
     icon: IDWriteTextFormat,
     hero: IDWriteTextFormat,
@@ -267,6 +277,10 @@ struct St {
     app_info: Vec<(String, Option<Img>, String)>,
     /// The open-programs list while "Add program" is open.
     picking: Option<Vec<crate::apps::Prog>>,
+    /// The saved program whose shortcut lines are shown (one at a time).
+    open_app: Option<usize>,
+    /// Where each Shortcuts section starts in the scrolling content (set while drawing).
+    marks: std::cell::Cell<[f32; 5]>,
 }
 
 thread_local! {
@@ -322,7 +336,13 @@ fn fonts(g: &Gfx) -> Result<Fonts> {
         path.SetTrimming(&t, &sign)?;
     }
     let icon = g.icon_format(16.0)?;
+    let wrap = mk(text, 12.0, false)?;
+    unsafe {
+        wrap.SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP)?;
+        wrap.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR)?;
+    }
     Ok(Fonts {
+        wrap,
         title: mk(disp, 28.0, true)?,
         body: mk(text, 14.0, false)?,
         body_b: mk(text, 14.0, true)?,
@@ -404,6 +424,8 @@ pub fn open() -> bool {
                 content_h: 0.0,
                 app_info: vec![],
                 picking: None,
+                open_app: None,
+                marks: std::cell::Cell::new([0.0; 5]),
             })
         });
         with(|s| s.refresh_apps());
@@ -515,7 +537,10 @@ impl St {
             Sg::ImageFmt => output::Fmt::ALL.iter().position(|f| *f == self.cfg.image_format),
             Sg::VideoFmt => Some(self.cfg.gif as usize),
             Sg::Frame => crate::frame::Style::ALL.iter().position(|f| *f == self.cfg.frame),
-            Sg::Upload => crate::upload::Host::SHOWN.iter().position(|h| *h == self.cfg.upload_host),
+            Sg::Upload => match self.cfg.upload_host {
+                crate::upload::Host::Custom => Some(crate::upload::Host::SHOWN.len()),
+                h => crate::upload::Host::SHOWN.iter().position(|x| *x == h),
+            },
             Sg::Language => {
                 if self.cfg.language.eq_ignore_ascii_case("system") {
                     Some(0)
@@ -607,10 +632,15 @@ impl St {
             let w = self.g.measure(t("keys.reset"), &f.body).0 + 32.0;
             self.button(rt, rc(x1 - w, 26.0, x1, 58.0), t("keys.reset"), Act::ResetKeys, hits);
         }
-        let view = rc(NAV_W, VIEW_TOP, W, H);
+        let vt = self.view_top();
+        if self.page == 0 {
+            self.jump_bar(rt, x0, hits);
+        }
+        let view = rc(NAV_W, vt, W, H);
         unsafe { rt.PushAxisAlignedClip(&view, D2D1_ANTIALIAS_MODE_ALIASED) };
         let mut body: Hits = vec![];
-        let top = VIEW_TOP + 8.0 - self.scroll;
+        let top = vt + 8.0 - self.scroll;
+        let mut marks = [0.0f32; 5];
         let mut y = top;
         let card = |st: &St,
                     y: &mut f32,
@@ -643,6 +673,7 @@ impl St {
         };
         match self.page {
             0 => {
+                marks[0] = y - top;
                 card(
                     self,
                     &mut y,
@@ -671,7 +702,9 @@ impl St {
                 }
                 txt(rt, t("keys.how_to"), &f.sub, rc(x0 + 4.0, y + 2.0, x1, y + 26.0), p.sub);
                 y += 30.0;
-                for (scope, title) in GROUPS {
+                for (gi, (scope, title)) in GROUPS.iter().enumerate() {
+                    let scope = *scope;
+                    marks[gi + 1] = y - top;
                     txt(rt, t(title), &f.body_b, rc(x0 + 4.0, y + 6.0, x1, y + 32.0), p.text);
                     y += 36.0;
                     let rows: Vec<&keys::Def> = DEFS.iter().filter(|d| d.scope == scope).collect();
@@ -683,7 +716,7 @@ impl St {
                             rrect(rt, rc(x0 + 1.0, y, x1 - 1.0, y + 1.0), 0.0, p.divider, 0);
                         }
                         // only rows on screen cost anything
-                        if r.bottom > VIEW_TOP && r.top < H {
+                        if r.bottom > vt && r.top < H {
                             txt(rt, t(label_key(d.k)), &f.body, rc(x0 + 18.0, y, x1 - 190.0, y + rh), p.text);
                             self.hotkey(rt, r, d.k, &mut body);
                         }
@@ -709,16 +742,29 @@ impl St {
                 card(self, &mut y, t("shots.format"), t("shots.format_sub"), 300.0, &mut body, &mut |st, r, h| {
                     st.seg(rt, r, Sg::ImageFmt, &fmts, h)
                 });
-                let sub = t("shots.frame_sub");
-                let opts = [t("frame.s_off"), t("frame.s_color"), t("frame.s_light"), t("frame.s_dark")];
-                card(self, &mut y, t("shots.frame"), sub, 330.0, &mut body, &mut |st, r, h| {
-                    st.seg(rt, r, Sg::Frame, &opts, h)
-                });
+                let frames: Vec<(String, String)> = [
+                    ("frame.s_off", "frame.d_off"),
+                    ("frame.s_color", "frame.d_color"),
+                    ("frame.s_light", "frame.d_light"),
+                    ("frame.s_dark", "frame.d_dark"),
+                ]
+                .iter()
+                .map(|(a, b)| (t(a).to_string(), t(b).to_string()))
+                .collect();
+                y = self.radio_list(rt, y, t("shots.frame"), t("shots.frame_sub"), Sg::Frame, &frames, true, &mut body);
                 let sub = tf("shots.upload_sub", &[&keys::display(self.cfg.key(K::Upload))]);
-                let hosts = [t("upload.s_uguu"), t("upload.s_litter24"), t("upload.s_litter72")];
-                card(self, &mut y, t("shots.upload"), &sub, 400.0, &mut body, &mut |st, r, h| {
-                    st.seg(rt, r, Sg::Upload, &hosts, h)
-                });
+                let mut hosts: Vec<(String, String)> = [
+                    ("upload.s_uguu", "upload.d_uguu"),
+                    ("upload.s_litter24", "upload.d_litter24"),
+                    ("upload.s_litter72", "upload.d_litter72"),
+                ]
+                .iter()
+                .map(|(a, b)| (t(a).to_string(), t(b).to_string()))
+                .collect();
+                if self.cfg.upload_host == crate::upload::Host::Custom {
+                    hosts.push((t("upload.s_custom").to_string(), tf("upload.d_custom", &[&self.cfg.upload_url])));
+                }
+                y = self.radio_list(rt, y, t("shots.upload"), &sub, Sg::Upload, &hosts, false, &mut body);
             }
             2 => {
                 card(self, &mut y, t("video.save"), t("video.save_sub"), 300.0, &mut body, &mut |st, r, h| {
@@ -878,15 +924,16 @@ impl St {
         unsafe { rt.PopAxisAlignedClip() };
         // only what is visible can be clicked
         for (r, a) in body {
-            if r.bottom > VIEW_TOP && r.top < H {
-                hits.push((rc(r.left, r.top.max(VIEW_TOP), r.right, r.bottom.min(H)), a));
+            if r.bottom > vt && r.top < H {
+                hits.push((rc(r.left, r.top.max(vt), r.right, r.bottom.min(H)), a));
             }
         }
         // thin scroll indicator
-        let view_h = H - VIEW_TOP;
+        self.marks.set(marks);
+        let view_h = H - vt;
         if content_h > view_h {
             let bar_h = (view_h * view_h / content_h).max(32.0);
-            let pos = VIEW_TOP + (view_h - bar_h) * (self.scroll / (content_h - view_h)).clamp(0.0, 1.0);
+            let pos = vt + (view_h - bar_h) * (self.scroll / (content_h - view_h)).clamp(0.0, 1.0);
             rrect(rt, rc(W - 8.0, pos + 4.0, W - 4.0, pos + bar_h - 4.0), 2.0, p.sub, 0);
         }
         if let Some((msg, bad)) = &self.toast {
@@ -966,6 +1013,40 @@ impl St {
         }
     }
 
+    /// Top of the scrolling area on the current page.
+    fn view_top(&self) -> f32 {
+        if self.page == 0 {
+            VIEW_TOP + JUMP_H
+        } else {
+            VIEW_TOP
+        }
+    }
+
+    /// The row of section buttons under the Shortcuts title; the section in view is lit.
+    fn jump_bar(&self, rt: &ID2D1RenderTarget, x0: f32, hits: &mut Hits) {
+        let Some(f) = &self.f else { return };
+        let p = &self.p;
+        let marks = self.marks.get();
+        let here = (0..5).rev().find(|&i| marks[i] <= self.scroll + 24.0).unwrap_or(0);
+        let (y0, y1) = (VIEW_TOP + 2.0, VIEW_TOP + 30.0);
+        let mut x = x0;
+        for (i, key) in JUMPS.iter().enumerate() {
+            let label = t(key);
+            let w = self.g.measure(label, &f.sub).0 + 26.0;
+            let r = rc(x, y0, x + w, y1);
+            let a = Act::Jump(i);
+            if i == here {
+                rrect(rt, r, 14.0, p.accent, 0);
+                txt(rt, label, &f.sub, rc(r.left + 13.0, r.top, r.right, r.bottom), p.on_accent);
+            } else {
+                rrect(rt, r, 14.0, if self.hover == Some(a) { p.btn_hover } else { p.btn }, p.btn_border);
+                txt(rt, label, &f.sub, rc(r.left + 13.0, r.top, r.right, r.bottom), p.text);
+            }
+            hits.push((r, a));
+            x += w + 6.0;
+        }
+    }
+
     /// The open-programs list under "Add program"; returns the new y.
     fn draw_picker(&self, rt: &ID2D1RenderTarget, list: &[crate::apps::Prog], y: f32, hits: &mut Hits) -> f32 {
         let Some(f) = &self.f else { return y };
@@ -1011,9 +1092,11 @@ impl St {
         let (x0, x1) = (NAV_W + 32.0, W - 32.0);
         let (head, line, pad) = (64.0, 32.0, 8.0);
         let bound: Vec<K> = TRAY_KEYS.iter().copied().filter(|k| !keys::display(self.cfg.key(*k)).is_empty()).collect();
-        let rh = head + line * bound.len() as f32 + pad;
         let apps = &self.cfg.pause_apps;
-        rrect(rt, rc(x0, y, x1, y + rh * apps.len() as f32), 6.0, p.card, p.card_border);
+        let open = |i: usize| self.open_app == Some(i) || apps.len() == 1;
+        let total: f32 =
+            (0..apps.len()).map(|i| head + if open(i) { line * bound.len() as f32 + pad } else { 0.0 }).sum();
+        rrect(rt, rc(x0, y, x1, y + total), 6.0, p.card, p.card_border);
         let rw = self.g.measure(t("keys.apps_remove"), &f.body).0 + 28.0;
         let key_w =
             bound.iter().map(|k| self.g.measure(&keys::display(self.cfg.key(*k)), &f.sub).0).fold(0.0, f32::max) + 20.0;
@@ -1021,44 +1104,72 @@ impl St {
             if i > 0 {
                 rrect(rt, rc(x0 + 1.0, y, x1 - 1.0, y + 1.0), 0.0, p.divider, 0);
             }
+            let is_open = open(i);
+            // the header opens and closes the program's lines (with one program it stays open)
+            let hr = rc(x0 + 6.0, y + 4.0, x1 - rw - 30.0, y + head - 4.0);
+            if apps.len() > 1 {
+                let act = Act::OpenApp(i);
+                if self.hover == Some(act) {
+                    rrect(rt, hr, 4.0, p.hover, 0);
+                }
+                let chev = if is_open { '\u{E70E}' } else { '\u{E70D}' };
+                txt(rt, &chev.to_string(), &f.icon, rc(hr.right - 26.0, y, hr.right, y + head), p.sub);
+                hits.push((hr, act));
+            }
             let (name, icon) = match self.app_info.get(i) {
                 Some((n, ic, _)) => (n.as_str(), ic.as_ref()),
                 None => (a.exe.as_str(), None),
             };
             self.app_icon(rt, icon, x0 + 18.0, y + 12.0, 24.0);
-            txt(rt, name, &f.body, rc(x0 + 54.0, y + 8.0, x1 - rw - 40.0, y + 32.0), p.text);
+            txt(rt, name, &f.body, rc(x0 + 54.0, y + 8.0, hr.right - 30.0, y + 32.0), p.text);
             let b = rc(x1 - 18.0 - rw, y + 8.0, x1 - 18.0, y + 36.0);
             self.button(rt, b, t("keys.apps_remove"), Act::RemoveApp(i), hits);
-            txt(rt, t("keys.apps_keys"), &f.sub, rc(x0 + 54.0, y + 38.0, x1 - 18.0, y + 60.0), p.sub);
-            // one line per shortcut: what it does, its key, and a switch "give it to the program"
+            let sub = if is_open {
+                t("keys.apps_keys").to_string()
+            } else {
+                let off: Vec<String> =
+                    bound.iter().filter(|k| a.pauses(**k)).map(|k| keys::display(self.cfg.key(*k))).collect();
+                tf("keys.apps_summary", &[&off.join(", ")])
+            };
+            txt(rt, &sub, &f.sub, rc(x0 + 54.0, y + 36.0, hr.right - 30.0, y + 58.0), p.sub);
             let mut ly = y + head;
-            for k in &bound {
-                let k = *k;
-                let act = Act::AppKey(i, k);
-                let r = rc(x0 + 46.0, ly, x1 - 12.0, ly + line);
-                if self.hover == Some(act) {
-                    rrect(rt, r, 4.0, p.hover, 0);
+            if is_open {
+                // one line per shortcut: what it does, its key, and a switch: on = off in this program
+                for k in &bound {
+                    let k = *k;
+                    let act = Act::AppKey(i, k);
+                    let r = rc(x0 + 46.0, ly, x1 - 12.0, ly + line);
+                    if self.hover == Some(act) {
+                        rrect(rt, r, 4.0, p.hover, 0);
+                    }
+                    let off = a.pauses(k);
+                    let sw = rc(r.right - 6.0 - 36.0, r.top + 7.0, r.right - 6.0, r.bottom - 7.0);
+                    let cy = (sw.top + sw.bottom) / 2.0;
+                    if off {
+                        rrect(rt, sw, 8.0, p.accent, 0);
+                        circle(rt, sw.right - 8.0, cy, 5.0, p.on_accent);
+                    } else {
+                        rrect(rt, sw, 8.0, 0, p.off_border);
+                        circle(rt, sw.left + 8.0, cy, 4.0, p.off_border);
+                    }
+                    let label = keys::display(self.cfg.key(k));
+                    let cap = rc(sw.left - 14.0 - key_w, r.top + 4.0, sw.left - 14.0, r.bottom - 4.0);
+                    rrect(rt, cap, 4.0, p.btn, p.btn_border);
+                    let lw = self.g.measure(&label, &f.sub).0;
+                    txt(
+                        rt,
+                        &label,
+                        &f.sub,
+                        rc((cap.left + cap.right - lw) / 2.0, cap.top, cap.right, cap.bottom),
+                        p.text,
+                    );
+                    txt(rt, t(label_key(k)), &f.sub, rc(r.left + 8.0, r.top, cap.left - 10.0, r.bottom), p.text);
+                    hits.push((r, act));
+                    ly += line;
                 }
-                let given = a.pauses(k);
-                let sw = rc(r.right - 6.0 - 36.0, r.top + 7.0, r.right - 6.0, r.bottom - 7.0);
-                let cy = (sw.top + sw.bottom) / 2.0;
-                if given {
-                    rrect(rt, sw, 8.0, p.accent, 0);
-                    circle(rt, sw.right - 8.0, cy, 5.0, p.on_accent);
-                } else {
-                    rrect(rt, sw, 8.0, 0, p.off_border);
-                    circle(rt, sw.left + 8.0, cy, 4.0, p.off_border);
-                }
-                let label = keys::display(self.cfg.key(k));
-                let cap = rc(sw.left - 14.0 - key_w, r.top + 4.0, sw.left - 14.0, r.bottom - 4.0);
-                rrect(rt, cap, 4.0, p.btn, p.btn_border);
-                let lw = self.g.measure(&label, &f.sub).0;
-                txt(rt, &label, &f.sub, rc((cap.left + cap.right - lw) / 2.0, cap.top, cap.right, cap.bottom), p.text);
-                txt(rt, t(label_key(k)), &f.sub, rc(r.left + 8.0, r.top, cap.left - 10.0, r.bottom), p.text);
-                hits.push((r, act));
-                ly += line;
+                ly += pad;
             }
-            y += rh;
+            y = ly;
         }
         y + 4.0
     }
@@ -1080,9 +1191,101 @@ impl St {
             app.path = path.to_string();
         }
         self.cfg.pause_apps.push(app);
+        self.open_app = Some(self.cfg.pause_apps.len() - 1);
         self.refresh_apps();
         let name = self.app_info.last().map(|i| i.0.clone()).unwrap_or_default();
         self.commit(&tf("keys.apps_added", &[&name]));
+    }
+
+    /// A card with a title and a sentence, then one row per option: a radio mark, its name
+    /// and what it means (and, for the share frame, a small picture of the result).
+    #[allow(clippy::too_many_arguments)]
+    fn radio_list(
+        &self,
+        rt: &ID2D1RenderTarget,
+        y: f32,
+        title: &str,
+        sub: &str,
+        s: Sg,
+        opts: &[(String, String)],
+        swatch: bool,
+        hits: &mut Hits,
+    ) -> f32 {
+        let Some(f) = &self.f else { return y };
+        let p = &self.p;
+        let (x0, x1) = (NAV_W + 32.0, W - 32.0);
+        // the sentence may take two lines
+        let two = self.g.measure(sub, &f.sub).0 > x1 - x0 - 36.0;
+        let (head, rh) = (if two { 84.0 } else { 64.0 }, 52.0);
+        let h = head + rh * opts.len() as f32 + 8.0;
+        rrect(rt, rc(x0, y, x1, y + h), 6.0, p.card, p.card_border);
+        txt(rt, title, &f.body, rc(x0 + 18.0, y + 13.0, x1 - 18.0, y + 35.0), p.text);
+        txt(rt, sub, if two { &f.wrap } else { &f.sub }, rc(x0 + 18.0, y + 37.0, x1 - 18.0, y + head - 4.0), p.sub);
+        let sel = self.seg_val(s);
+        let mut ry = y + head;
+        for (i, (name, desc)) in opts.iter().enumerate() {
+            let r = rc(x0 + 6.0, ry, x1 - 6.0, ry + rh);
+            let a = Act::Seg(s, i);
+            if self.hover == Some(a) && sel != Some(i) {
+                rrect(rt, r, 4.0, p.hover, 0);
+            }
+            let cy = (r.top + r.bottom) / 2.0;
+            let cx = x0 + 28.0;
+            if sel == Some(i) {
+                circle(rt, cx, cy, 9.0, p.accent);
+                circle(rt, cx, cy, 4.0, p.on_accent);
+            } else {
+                circle(rt, cx, cy, 9.0, p.off_border);
+                circle(rt, cx, cy, 8.0, p.card);
+            }
+            let mut tx = x0 + 50.0;
+            if swatch {
+                self.frame_swatch(rt, i, rc(tx, cy - 14.0, tx + 40.0, cy + 14.0));
+                tx += 54.0;
+            }
+            txt(rt, name, &f.body, rc(tx, ry + 7.0, x1 - 18.0, ry + 28.0), p.text);
+            txt(rt, desc, &f.sub, rc(tx, ry + 27.0, x1 - 18.0, ry + 47.0), p.sub);
+            hits.push((r, a));
+            ry += rh;
+        }
+        y + h + 4.0
+    }
+
+    /// A tiny picture of a share frame style: the screenshot (a light tile) on its background.
+    fn frame_swatch(&self, rt: &ID2D1RenderTarget, i: usize, r: D2D_RECT_F) {
+        let shot = rc(r.left + 8.0, r.top + 6.0, r.right - 8.0, r.bottom - 6.0);
+        let tile = if self.light { 0xFFFF_FFFF } else { 0xFFE6_E6E6 };
+        match i {
+            0 => {
+                rrect(rt, r, 4.0, 0, self.p.btn_border);
+                rrect(rt, rc(r.left + 2.0, r.top + 2.0, r.right - 2.0, r.bottom - 2.0), 2.0, tile, 0);
+            }
+            _ => {
+                if i == 1 {
+                    unsafe {
+                        let stops = [
+                            D2D1_GRADIENT_STOP { position: 0.0, color: color(0xFF4F_6BFF) },
+                            D2D1_GRADIENT_STOP { position: 1.0, color: color(0xFFB0_5CFF) },
+                        ];
+                        if let Ok(sc) = rt.CreateGradientStopCollection(&stops, D2D1_GAMMA_2_2, D2D1_EXTEND_MODE_CLAMP)
+                        {
+                            let props = D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES {
+                                startPoint: pt(r.left, r.bottom),
+                                endPoint: pt(r.right, r.top),
+                            };
+                            if let Ok(g) = rt.CreateLinearGradientBrush(&props, None, &sc) {
+                                rt.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect: r, radiusX: 4.0, radiusY: 4.0 }, &g);
+                            }
+                        }
+                    }
+                } else {
+                    let bg = if i == 2 { 0xFFF1_F2F5 } else { 0xFF1E_1F22 };
+                    rrect(rt, r, 4.0, bg, self.p.btn_border);
+                }
+                rrect(rt, rc(shot.left + 1.0, shot.top + 2.0, shot.right + 1.0, shot.bottom + 2.0), 3.0, 0x40000000, 0);
+                rrect(rt, shot, 3.0, tile, 0);
+            }
+        }
     }
 
     fn toggle(&self, rt: &ID2D1RenderTarget, card: D2D_RECT_F, tg: Tg, hits: &mut Hits) {
@@ -1300,7 +1503,10 @@ impl St {
                     Sg::ImageFmt => self.cfg.image_format = output::Fmt::ALL[i],
                     Sg::VideoFmt => self.cfg.gif = i == 1,
                     Sg::Frame => self.cfg.frame = crate::frame::Style::ALL[i],
-                    Sg::Upload => self.cfg.upload_host = crate::upload::Host::SHOWN[i],
+                    Sg::Upload => match crate::upload::Host::SHOWN.get(i) {
+                        Some(h) => self.cfg.upload_host = *h,
+                        None => return, // the custom row is set in the ini
+                    },
                     Sg::Language => {
                         self.cfg.language = if i == 0 { "system".into() } else { i18n::LANGS[i - 1].0.into() };
                         i18n::set(&self.cfg.language);
@@ -1326,6 +1532,7 @@ impl St {
                 if i < self.cfg.pause_apps.len() {
                     let name = self.app_info.get(i).map(|n| n.0.clone()).unwrap_or_default();
                     self.cfg.pause_apps.remove(i);
+                    self.open_app = None;
                     self.refresh_apps();
                     self.commit(&tf("keys.apps_removed", &[&name]));
                 }
@@ -1336,6 +1543,12 @@ impl St {
                 }
             }
             Act::CancelPick => self.picking = None,
+            Act::OpenApp(i) => self.open_app = if self.open_app == Some(i) { None } else { Some(i) },
+            Act::Jump(i) => {
+                self.scroll = 0.0;
+                let to = self.marks.get()[i.min(4)];
+                self.scroll_by(if i == 0 { 0.0 } else { to - 4.0 });
+            }
             Act::AppKey(i, k) => {
                 let Some(app) = self.cfg.pause_apps.get_mut(i) else { return };
                 let mut on: Vec<K> = TRAY_KEYS.iter().copied().filter(|x| app.pauses(*x)).collect();
@@ -1447,7 +1660,7 @@ impl St {
     }
 
     fn scroll_by(&mut self, dy: f32) {
-        let max = (self.content_h - (H - VIEW_TOP)).max(0.0);
+        let max = (self.content_h - (H - self.view_top())).max(0.0);
         self.scroll = (self.scroll + dy).clamp(0.0, max);
     }
 }
@@ -1657,7 +1870,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
                     return LRESULT(0);
                 }
                 VK_PRIOR | VK_NEXT | VK_HOME | VK_END if msg == WM_KEYDOWN => {
-                    let page = H - VIEW_TOP - 40.0;
+                    let page = H - with(|s| s.view_top()).unwrap_or(VIEW_TOP) - 40.0;
                     with(|s| match VIRTUAL_KEY(vk) {
                         VK_PRIOR => s.scroll_by(-page),
                         VK_NEXT => s.scroll_by(page),

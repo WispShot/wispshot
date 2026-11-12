@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Settings > Shortcuts: a row of buttons under the title jumps to each section (Programs, Global, Editing, Video,
+  Pinned), so the list no longer has to be scrolled through. The groups have clearer names (*Editing a
+  screenshot*, *Drawing on a video recording*), and *Turn shortcuts off in some programs* says plainly which
+  shortcuts are off while each program is in front. With several programs, each folds into one line that lists
+  them and opens with a click.
+- Settings > Screenshots: *Upload to the internet* and *Add a frame* (was *Share frame*) list their choices one
+  under the other, each with a line on what it does; the frame choices show a small picture of the result.
+
+### Fixed
+
+- A notice opens only an upload link or a file that exists, whatever another program sends the tray.
+
 ## [0.4.1] - 2026-11-12
 
 ### Added

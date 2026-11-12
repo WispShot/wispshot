@@ -998,6 +998,10 @@ fn command(id: usize) {
             if let Some(pill) = session_window("WispRecPill") {
                 let _ = PostMessageW(Some(pill), recui::WM_REC_STOP_REQUEST, WPARAM(0), LPARAM(0));
             }
+            // Settings is its own process: it goes with the tray
+            if let Some(w) = session_window("WispSettings") {
+                let _ = PostMessageW(Some(w), WM_CLOSE, WPARAM(0), LPARAM(0));
+            }
             let _ = DestroyWindow(app);
         },
         _ => {}
@@ -1116,9 +1120,7 @@ unsafe extern "system" fn app_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                     // one notice per new version; the tray menu keeps offering it
                     if with(|st| st.update.replace(s.clone()) != Some(s.clone())) == Some(true) {
                         with(|st| st.last_file = Some(PathBuf::from(UPDATE_MARK)));
-                        // a portable copy is not replaced in place: its click opens the download page
-                        let body = if update::installed() { "update.ready" } else { "update.ready_portable" };
-                        notify(&tf("update.ready_title", &[&s]), t(body));
+                        notify(&tf("update.ready_title", &[&s]), t("update.ready"));
                     }
                 }
                 IPC_OCR_HINT if !OCR_HINTED.swap(true, Ordering::Relaxed) => {

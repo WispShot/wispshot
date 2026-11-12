@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- The portable copy updates itself too: *Install* downloads the portable zip, checks it against the release's
+  SHA256SUMS.txt, swaps the exe in its folder and starts it again (settings stay). A folder WispShot cannot write
+  to still opens the download page.
+
 ### Changed
 
 - Settings > Shortcuts > programs: each shortcut line now says who gets the key while that program is in front,
@@ -10,8 +16,9 @@
 ### Fixed
 
 - Settings > About > *Check now* shows what it found on the card itself (newest version, the new version with an
-  Install or Download button, or why it could not check). Before, it relied on a tray notice that did not come when
+  Install button, or why it could not check). Before, it relied on a tray notice that did not come when
   the daily check had already announced that version, so the button seemed to do nothing.
+- Quitting from the tray also closes an open Settings window.
 
 ## [0.4.2] - 2026-11-12
 

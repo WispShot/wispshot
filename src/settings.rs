@@ -45,6 +45,8 @@ enum Upd {
     Latest,
     New(String),
     Failed(String),
+    /// "Install" was pressed: the update process downloads it and restarts WispShot.
+    Installing(String),
 }
 const KBD_KEY: PCWSTR = w!("Control Panel\\Keyboard");
 const SNIP_VALUE: PCWSTR = w!("PrintScreenKeyForSnippingEnabled");
@@ -167,7 +169,7 @@ enum Act {
     BarTool(usize),
     BarAction(usize),
     CheckUpdates,
-    /// Install the version the check found (a portable copy opens the download page).
+    /// Install the version the check found.
     InstallUpdate,
     Sponsor,
 }
@@ -931,11 +933,9 @@ impl St {
                         t("about.check_updates"),
                         Act::CheckUpdates,
                     ),
-                    Upd::New(v) => {
-                        let label = if crate::update::installed() { t("about.install") } else { t("about.download") };
-                        (tf("about.new_version", &[v]), label, Act::InstallUpdate)
-                    }
+                    Upd::New(v) => (tf("about.new_version", &[v]), t("about.install"), Act::InstallUpdate),
                     Upd::Failed(e) => (tf("about.check_failed", &[e]), t("about.try_again"), Act::CheckUpdates),
+                    Upd::Installing(v) => (tf("about.installing", &[v]), t("about.install"), Act::InstallUpdate),
                 };
                 let bw = self.g.measure(label, &f.body).0 + 32.0;
                 card(self, &mut y, t("about.updates"), &sub, bw + 40.0, &mut body, &mut |st, r, h| {
@@ -1273,7 +1273,10 @@ impl St {
                         rc((cap.left + cap.right - lw) / 2.0, cap.top, cap.right, cap.bottom),
                         p.text,
                     );
-                    txt(rt, t(label_key(k)), &f.sub, rc(r.left + 8.0, r.top, cap.left - 10.0, r.bottom), p.text);
+                    // the narrow line drops a name's "(again to cancel)" part
+                    let name = t(label_key(k));
+                    let name = name.split(" (").next().unwrap_or(name);
+                    txt(rt, name, &f.sub, rc(r.left + 8.0, r.top, cap.left - 10.0, r.bottom), p.text);
                     hits.push((r, act));
                     let chosen_half = if to_prog {
                         rc(seg.left + seg_w, seg.top, seg.right, seg.bottom)
@@ -1721,9 +1724,12 @@ impl St {
                 });
             }
             Act::InstallUpdate => {
+                // once is enough (a second process would download it again)
+                let Upd::New(v) = self.upd.clone() else { return };
                 if let Ok(exe) = std::env::current_exe() {
                     let _ = std::process::Command::new(exe).args(["--update", "install"]).spawn();
                 }
+                self.upd = Upd::Installing(v);
             }
             Act::OpenDir(video) => {
                 crate::open_path(if video { &self.cfg.video_dir } else { &self.cfg.save_dir }, false)

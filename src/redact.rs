@@ -210,11 +210,13 @@ fn luhn_card(run: &str, d: &[u8]) -> bool {
     sum.is_multiple_of(10)
 }
 
-/// The line names a tax number ("VKN", "Vergi No", "V.D.", "Tax ID").
+/// The line names a tax or ID number ("VKN", "Vergi No", "Kimlik No", "V.D.", "Tax ID").
 fn mentions_tax(line: &[Word]) -> bool {
     line.iter().any(|(w, _)| {
         let w = trim(w).to_lowercase().replace('.', "");
-        matches!(w.as_str(), "vkn" | "vd" | "vno" | "tax" | "vat") || w.starts_with("vergi")
+        matches!(w.as_str(), "vkn" | "tckn" | "vd" | "vno" | "tax" | "vat")
+            || w.starts_with("vergi")
+            || w.starts_with("kimlik")
     })
 }
 
@@ -373,6 +375,10 @@ mod tests {
         assert_eq!(hidden(&["0532", "123", "45", "67", "2026"]), vec![[0.0, 0.0, 38.0, 10.0]]);
         assert_eq!(hidden(&["VKN:", "1234567890"]).len(), 1);
         assert_eq!(hidden(&["Vergi", "No:", "3982597912", "Kadıköy", "V.D."]).len(), 1);
+        assert_eq!(hidden(&["Vergi", "no:", "3982597912"]).len(), 1);
+        assert_eq!(hidden(&["Kimlik", "No:", "3982597912"]).len(), 1);
+        assert_eq!(hidden(&["Kimlik", "no", "10000000146"]).len(), 1);
+        assert_eq!(hidden(&["VERGİ", "NO", "1234567890"]).len(), 1);
     }
 
     #[test]

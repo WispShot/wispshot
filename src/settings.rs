@@ -502,6 +502,23 @@ pub(crate) fn rrect(rt: &ID2D1RenderTarget, r: D2D_RECT_F, rad: f32, fill: u32, 
     }
 }
 
+/// A thin bar in the logo's gradient (sky blue at the top to violet), for the selected page.
+fn brand_bar(rt: &ID2D1RenderTarget, r: D2D_RECT_F) {
+    use crate::logo::{C0, C1};
+    unsafe {
+        let stops = [
+            D2D1_GRADIENT_STOP { position: 0.0, color: color(0xFF00_0000 | C0) },
+            D2D1_GRADIENT_STOP { position: 1.0, color: color(0xFF00_0000 | C1) },
+        ];
+        let Ok(sc) = rt.CreateGradientStopCollection(&stops, D2D1_GAMMA_2_2, D2D1_EXTEND_MODE_CLAMP) else { return };
+        let props =
+            D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES { startPoint: pt(r.left, r.top), endPoint: pt(r.left, r.bottom) };
+        if let Ok(g) = rt.CreateLinearGradientBrush(&props, None, &sc) {
+            rt.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect: r, radiusX: 1.5, radiusY: 1.5 }, &g);
+        }
+    }
+}
+
 fn circle(rt: &ID2D1RenderTarget, x: f32, y: f32, r: f32, c: u32) {
     unsafe {
         if let Ok(b) = brush(rt, c) {
@@ -618,7 +635,7 @@ impl St {
             };
             rrect(rt, r, 5.0, bg, 0);
             if self.page == i {
-                rrect(rt, rc(8.0, y + 11.0, 11.0, y + 27.0), 1.5, p.accent, 0);
+                brand_bar(rt, rc(8.0, y + 11.0, 11.0, y + 27.0));
             }
             txt(rt, &icon.to_string(), &f.icon, rc(20.0, y, 44.0, y + 38.0), p.text);
             txt(rt, t(name), &f.body, rc(54.0, y, NAV_W - 12.0, y + 38.0), p.text);
@@ -940,20 +957,22 @@ impl St {
             let pos = vt + (view_h - bar_h) * (self.scroll / (content_h - view_h)).clamp(0.0, 1.0);
             rrect(rt, rc(W - 8.0, pos + 4.0, W - 4.0, pos + bar_h - 4.0), 2.0, p.sub, 0);
         }
+        // a small card like the others: a mark in the accent (or red) circle, then the message
         if let Some((msg, bad)) = &self.toast {
             let (tw, _) = self.g.measure(msg, &f.body);
-            let r = rc(x1 - tw - 56.0, H - 64.0, x1, H - 24.0);
-            rrect(rt, r, 6.0, if self.light { 0xFF2B_2B2B } else { 0xFFF3_F3F3 }, 0);
-            let ic = if *bad { '\u{E7BA}' } else { '\u{E73E}' };
-            let fg = if self.light { 0xFFFF_FFFF } else { 0xFF1B_1B1B };
-            txt(
-                rt,
-                &ic.to_string(),
-                &f.icon,
-                rc(r.left + 10.0, r.top, r.left + 30.0, r.bottom),
-                if *bad { p.danger } else { fg },
-            );
-            txt(rt, msg, &f.body, rc(r.left + 34.0, r.top, r.right - 8.0, r.bottom), fg);
+            let r = rc(x1 - tw - 64.0, H - 66.0, x1, H - 24.0);
+            rrect(rt, rc(r.left - 1.0, r.top + 2.0, r.right + 1.0, r.bottom + 5.0), 9.0, 0x22000000, 0);
+            rrect(rt, r, 8.0, p.card, p.card_border);
+            let (cx, cy) = (r.left + 24.0, (r.top + r.bottom) / 2.0);
+            circle(rt, cx, cy, 10.0, if *bad { p.danger } else { p.accent });
+            let ic = if *bad { '\u{E711}' } else { '\u{E73E}' };
+            if let Ok(small) = self.g.icon_format(11.0) {
+                unsafe {
+                    let _ = small.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+                }
+                txt(rt, &ic.to_string(), &small, rc(cx - 10.0, cy - 10.0, cx + 10.0, cy + 10.0), p.on_accent);
+            }
+            txt(rt, msg, &f.body, rc(r.left + 44.0, r.top, r.right - 10.0, r.bottom), p.text);
         }
         content_h
     }

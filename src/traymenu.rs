@@ -64,12 +64,10 @@ pub(crate) fn reg_dword(path: PCWSTR, name: PCWSTR) -> Option<u32> {
     }
 }
 
-/// Windows "accent color" as 0xRRGGBB (registry stores 0xAABBGGRR).
+/// WispShot's accent as 0xRRGGBB: the indigo between the two colours of the logo
+/// (logo::C0 sky blue and logo::C1 violet), dark enough for white text on it.
 pub fn accent() -> u32 {
-    match reg_dword(w!("Software\\Microsoft\\Windows\\DWM"), w!("AccentColor")) {
-        Some(v) => ((v & 0xFF) << 16) | (v & 0xFF00) | ((v >> 16) & 0xFF),
-        None => 0x0078D4,
-    }
+    0x4F6BED
 }
 
 /// Taskbar / menus follow the *system* theme, apps the *app* theme.

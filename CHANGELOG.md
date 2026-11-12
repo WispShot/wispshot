@@ -2,13 +2,19 @@
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-12
+
 ### Added
 
 - *Hide sensitive info* (`Ctrl+B`) also blurs Turkish tax numbers (VKN, 10 digits with their check digit) on lines
-  that say so ("VKN", "Vergi No", "V.D.", "Tax ID"), so order and document numbers of the same length stay.
+  that say so ("VKN", "Vergi No", "Kimlik No", "V.D.", "Tax ID"), so order and document numbers of the same length
+  stay.
 
 ### Changed
 
+- WispShot's own colors: the settings, the tray menu and the editor toolbar use an indigo from the logo instead of
+  the Windows accent, the selected page is marked with the logo's gradient, and the "Saved" notice is a small
+  card that matches the window.
 - The editor toolbar is shorter and follows the light or dark theme and the Windows accent color. It shows six
   tools, the color, undo and redo, Pin, Save, Close and a labeled Copy button; the other tools and actions open
   from two "more" buttons in small panels that match the bar (actions with their names and shortcuts). The

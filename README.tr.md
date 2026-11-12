@@ -65,7 +65,7 @@ Başka bir araçta bir arada bulamayacağınız birkaç şey:
 - **Dilinizi okuyan metin tanıma.** OCR, Windows'un kendi motorunu kullanır ama yazının diline uygun motoru seçer ve
   küçük ekran yazılarını önce büyütür: İngilizce bir Windows'ta Türkçe arayüz yazılarında hatalı karakter oranı %15-18'den
   yaklaşık %1'e indi; hiçbir şey indirmeden.
-- **Gizlilik baştan düşünülmüş.** `Ctrl+B` bir çekimdeki e-posta, telefon, IBAN, kart ve kimlik numaralarını ve API
+- **Gizlilik baştan düşünülmüş.** `Ctrl+B` bir çekimdeki e-posta, telefon, IBAN, kart, kimlik (TCKN) ve vergi (VKN) numaralarını ve API
   anahtarlarını bulup tek adımda bulanıklaştırır. Siz Yükle'ye basmadıkça bilgisayardan hiçbir şey çıkmaz,
   telemetri yoktur.
 - **Eski bir ekran görüntüsünü içindeki yazıyla bulun**; aranabilir geçmiş kendi diskinizde durur.
@@ -90,7 +90,7 @@ Başka bir araçta bir arada bulamayacağınız birkaç şey:
 - Sınırsız geri al ve yinele
 - **Çerçeve**: renkli, açık ya da koyu arka planda boşluk, yuvarlak köşe ve gölge; görüntü sohbette ve belgede
   düzgün durur (`F`)
-- **Hassas bilgileri gizleme** (`Ctrl+B`): e-posta, telefon, IBAN, kart numarası, T.C. kimlik no ve API
+- **Hassas bilgileri gizleme** (`Ctrl+B`): e-posta, telefon, IBAN, kart numarası, T.C. kimlik no, vergi kimlik no (VKN) ve API
   anahtarlarını Windows OCR ile bulup tek adımda bulanıklaştırır (sağlama hanesi denetimi sıradan sayılara dokunmaz)
 - **Kaydırmalı çekim**: seçili alanda uzun bir sayfayı kaydırın (ya da *Otomatik*e bırakın), tek bir uzun görüntü alın
 

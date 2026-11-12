@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- *Hide sensitive info* (`Ctrl+B`) also blurs Turkish tax numbers (VKN, 10 digits with their check digit) on lines
+  that say so ("VKN", "Vergi No", "V.D.", "Tax ID"), so order and document numbers of the same length stay.
+
 ### Changed
 
 - The editor toolbar is shorter and follows the light or dark theme and the Windows accent color. It shows six

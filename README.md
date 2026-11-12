@@ -64,7 +64,7 @@ A few things you won't find together anywhere else:
 - **Text recognition that reads your language.** OCR uses the engine built into Windows, but picks the right
   language for the text and enlarges small screen text first: on an English Windows, Turkish UI text went from 15-18% wrong
   characters to about 1%, without any download.
-- **Privacy built in.** `Ctrl+B` finds e-mail addresses, phone numbers, IBANs, card and ID numbers and API keys in
+- **Privacy built in.** `Ctrl+B` finds e-mail addresses, phone numbers, IBANs, card, ID and tax numbers and API keys in
   a capture and blurs them in one step. Nothing leaves your PC unless you press Upload, and there is no telemetry.
 - **Find any old screenshot by the words in it**, with the searchable history kept on your own disk.
 - **Draw on a video while you record**, with marks that fade by themselves.
@@ -88,7 +88,7 @@ A few things you won't find together anywhere else:
 - Unlimited undo and redo
 - **Frame**: a margin, rounded corners and a shadow on a colorful, light or dark background, so a capture looks
   tidy in a chat or a document (`F`)
-- **Hide sensitive info** (`Ctrl+B`): finds e-mail addresses, phone numbers, IBANs, card numbers, ID numbers
+- **Hide sensitive info** (`Ctrl+B`): finds e-mail addresses, phone numbers, IBANs, card numbers, ID and tax numbers (TCKN, VKN)
   and API keys with Windows OCR and blurs them in one step (checksums keep ordinary numbers untouched)
 - **Scrolling capture**: scroll a long page inside the selected area (or let *Auto* do it) and get one tall image
 

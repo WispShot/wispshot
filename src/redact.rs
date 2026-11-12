@@ -1,6 +1,6 @@
 //! "Hide sensitive info": finds e-mail addresses, phone numbers, IBANs, card
-//! numbers, Turkish ID numbers and API keys / tokens in OCR output and returns
-//! the boxes to blur. Checksums (IBAN mod 97, Luhn, T.C. kimlik) keep numbers
+//! numbers, Turkish ID and tax numbers and API keys / tokens in OCR output and returns
+//! the boxes to blur. Checksums (IBAN mod 97, Luhn, T.C. kimlik, VKN) keep numbers
 //! that only look similar from being hidden; phones and tokens use shape rules.
 
 use crate::ocr::Word;
@@ -31,6 +31,15 @@ pub fn find(lines: &[Vec<Word>]) -> Vec<[f32; 4]> {
         // digits inside an IBAN are not a phone number of their own
         hits.extend(numbers(&s).into_iter().filter(|&(a, b)| !ib.iter().any(|&(x, y)| x < b && a < y)));
         hits.extend(ib);
+        // a tax number only where the line says so: one check digit lets 1 in 10 random numbers through
+        if mentions_tax(line) {
+            for (i, &(a, b)) in spans.iter().enumerate() {
+                let d: Vec<u8> = trim(&line[i].0).bytes().map(|c| c.wrapping_sub(b'0')).collect();
+                if d.len() == 10 && d.iter().all(|&x| x < 10) && vkn(&d) {
+                    hits.push((a, b));
+                }
+            }
+        }
         for (a, b) in hits {
             // union of the words the match touches
             let mut r: Option<[f32; 4]> = None;
@@ -201,6 +210,32 @@ fn luhn_card(run: &str, d: &[u8]) -> bool {
     sum.is_multiple_of(10)
 }
 
+/// The line names a tax number ("VKN", "Vergi No", "V.D.", "Tax ID").
+fn mentions_tax(line: &[Word]) -> bool {
+    line.iter().any(|(w, _)| {
+        let w = trim(w).to_lowercase().replace('.', "");
+        matches!(w.as_str(), "vkn" | "vd" | "vno" | "tax" | "vat") || w.starts_with("vergi")
+    })
+}
+
+/// Vergi kimlik numarası: 10 digits, the last one a check digit.
+fn vkn(d: &[u8]) -> bool {
+    if d.len() != 10 {
+        return false;
+    }
+    let sum: u32 = (0..9)
+        .map(|k| {
+            let x = (d[k] as u32 + 10 - (k as u32 + 1)) % 10;
+            if x == 9 {
+                9
+            } else {
+                (x << (9 - k)) % 9
+            }
+        })
+        .sum();
+    (10 - sum % 10) % 10 == d[9] as u32
+}
+
 /// T.C. kimlik numarası: 11 digits, not starting with 0, two check digits.
 fn tc_kimlik(d: &[u8]) -> bool {
     if d.len() != 11 || d[0] == 0 {
@@ -336,6 +371,8 @@ mod tests {
         assert_eq!(hidden(&["3782", "822463", "10005"]).len(), 1); // Amex test number
         assert_eq!(hidden(&["Kart:", "4111", "1111", "1111", "1111", "500", "TL"]), vec![[10.0, 0.0, 48.0, 10.0]]);
         assert_eq!(hidden(&["0532", "123", "45", "67", "2026"]), vec![[0.0, 0.0, 38.0, 10.0]]);
+        assert_eq!(hidden(&["VKN:", "1234567890"]).len(), 1);
+        assert_eq!(hidden(&["Vergi", "No:", "3982597912", "Kadıköy", "V.D."]).len(), 1);
     }
 
     #[test]
@@ -351,6 +388,8 @@ mod tests {
         assert!(hidden(&["a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0"]).is_empty()); // a commit hash
         assert!(hidden(&["/Users/Efe/Documents/Projects2026"]).is_empty());
         assert!(hidden(&["0.0000000001"]).is_empty());
+        assert!(hidden(&["Belge", "3982597912"]).is_empty()); // a valid tax number shape, but no word for it
+        assert!(hidden(&["VKN:", "3982597913"]).is_empty()); // bad check digit
         assert!(hidden(&["+1000000000"]).is_empty());
         assert!(hidden(&["01.02.2026", "1234"]).is_empty());
         assert!(hidden(&["01.02.26", "123456"]).is_empty());

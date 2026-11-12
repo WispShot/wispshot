@@ -137,12 +137,17 @@ fn run(img: &Img) -> Result<(OcrResult, i32)> {
         let bmp = SoftwareBitmap::Create(BitmapPixelFormat::Bgra8, img.w * f, img.h * f)?;
         {
             let buf = bmp.LockBuffer(BitmapBufferAccessMode::Write)?;
-            let stride = buf.GetPlaneDescription(0)?.Stride as usize;
+            let plane = buf.GetPlaneDescription(0)?;
+            let (start, stride) = (plane.StartIndex.max(0) as usize, plane.Stride.max(0) as usize);
             let mref = buf.CreateReference()?;
             let access: IMemoryBufferByteAccess = mref.cast()?;
             let (mut p, mut cap) = (std::ptr::null_mut(), 0u32);
             unsafe { access.GetBuffer(&mut p, &mut cap)? };
-            let dst = unsafe { std::slice::from_raw_parts_mut(p, cap as usize) };
+            let need = start + stride * (img.h * f) as usize;
+            if p.is_null() || stride < (img.w * f * 4) as usize || (cap as usize) < need {
+                return Err(Error::from(E_UNEXPECTED));
+            }
+            let dst = unsafe { std::slice::from_raw_parts_mut(p.add(start), cap as usize - start) };
             img.upscale_into(f, dst, stride);
             mref.Close()?;
             buf.Close()?;

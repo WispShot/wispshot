@@ -11,6 +11,7 @@
 
 #![windows_subsystem = "windows"]
 
+mod apps;
 mod capture;
 mod config;
 mod countdown;
@@ -167,6 +168,8 @@ struct State {
     suspended: bool,
     /// The `pause_in_apps` program in front (its exe name), when that is the reason.
     paused_app: Option<String>,
+    /// The shortcuts that program keeps for itself; empty: all of them.
+    paused_keys: Vec<K>,
     /// Released while the settings window records a new hotkey.
     held: bool,
     fg_hook: HWINEVENTHOOK,
@@ -304,6 +307,7 @@ fn resident(args: Vec<String>) {
             recording: false,
             suspended: false,
             paused_app: None,
+            paused_keys: vec![],
             held: false,
             fg_hook: HWINEVENTHOOK::default(),
             loc_hook: HWINEVENTHOOK::default(),
@@ -315,8 +319,7 @@ fn resident(args: Vec<String>) {
         register_hotkeys(true);
         watch_fullscreen();
         output::clean_temp();
-        // the setup an update downloaded (it has finished by the time we start again)
-        let _ = std::fs::remove_dir_all(std::env::temp_dir().join("WispShot-update"));
+        update::clean_temp();
         if cmd != 0 {
             let _ = PostMessageW(Some(hwnd), WM_APP_CMD, WPARAM(cmd), LPARAM(0));
         }
@@ -333,7 +336,9 @@ fn resident(args: Vec<String>) {
 
 fn register_hotkeys(warn: bool) {
     let Some(app) = app_hwnd() else { return };
-    let Some((cfg, suspended, recording, held)) = with(|s| (s.cfg.clone(), s.suspended, s.recording, s.held)) else {
+    let Some((cfg, suspended, recording, held, only)) =
+        with(|s| (s.cfg.clone(), s.suspended, s.recording, s.held, s.paused_keys.clone()))
+    else {
         return;
     };
     let mut failed = vec![];
@@ -344,7 +349,8 @@ fn register_hotkeys(warn: bool) {
             let (hk, txt) = (cfg.hotkey(k), cfg.key_label(k));
             let _ = UnregisterHotKey(Some(app), id);
             // in a full-screen game the keys belong to the game; a running recording can still be stopped
-            if held || suspended && !(id == HK_RECORD && recording) {
+            let paused = suspended && (only.is_empty() || only.contains(&k));
+            if held || paused && !(id == HK_RECORD && recording) {
                 continue;
             }
             if let Some(hk) = hk {
@@ -473,24 +479,25 @@ unsafe extern "system" fn on_location(_: HWINEVENTHOOK, _: u32, hwnd: HWND, obj:
 }
 
 fn check_fullscreen() {
-    let Some((on, apps, was, was_app)) =
-        with(|s| (s.cfg.pause_fullscreen, s.cfg.pause_apps.clone(), s.suspended, s.paused_app.clone()))
-    else {
+    let Some((on, apps, was, was_app, was_keys)) = with(|s| {
+        (s.cfg.pause_fullscreen, s.cfg.pause_apps.clone(), s.suspended, s.paused_app.clone(), s.paused_keys.clone())
+    }) else {
         return;
     };
-    let app_name = if apps.is_empty() { None } else { foreground_exe().filter(|e| apps.contains(e)) };
-    let full = app_name.is_none() && on && foreground_is_fullscreen();
-    let now = full || app_name.is_some();
-    if now == was && app_name == was_app {
+    let app = if apps.is_empty() { None } else { foreground_exe().and_then(|e| apps.into_iter().find(|a| a.exe == e)) };
+    let full = app.is_none() && on && foreground_is_fullscreen();
+    let now = full || app.is_some();
+    let keys = app.as_ref().map(|a| a.keys.clone()).unwrap_or_default();
+    let name = app.map(|a| a.exe);
+    if now == was && name == was_app && keys == was_keys {
         return;
     }
     with(|s| {
         s.suspended = now;
-        s.paused_app = app_name;
+        s.paused_app = name;
+        s.paused_keys = keys;
     });
-    if now != was {
-        register_hotkeys(false);
-    }
+    register_hotkeys(false);
     tray(NIM_MODIFY);
     if let Some(app) = app_hwnd() {
         unsafe {
@@ -511,6 +518,11 @@ fn foreground_exe() -> Option<String> {
 
 /// The exe name of a window's program, lowercase; None for our own windows.
 pub(crate) fn window_exe(hwnd: HWND) -> Option<String> {
+    window_path(hwnd).map(|p| p.rsplit('\\').next().unwrap_or(&p).to_lowercase())
+}
+
+/// The full path of a window's program; None for our own windows.
+pub(crate) fn window_path(hwnd: HWND) -> Option<String> {
     unsafe {
         let mut pid = 0u32;
         GetWindowThreadProcessId(hwnd, Some(&mut pid));
@@ -522,11 +534,7 @@ pub(crate) fn window_exe(hwnd: HWND) -> Option<String> {
         let mut n = buf.len() as u32;
         let ok = QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut n).is_ok();
         let _ = CloseHandle(h);
-        if !ok {
-            return None;
-        }
-        let path = String::from_utf16_lossy(&buf[..n as usize]);
-        Some(path.rsplit('\\').next().unwrap_or(&path).to_lowercase())
+        ok.then(|| String::from_utf16_lossy(&buf[..n as usize]))
     }
 }
 
@@ -999,7 +1007,14 @@ unsafe extern "system" fn app_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             // a press meant for it (re-checking also releases the keys for the next press)
             check_fullscreen();
             let stop_rec = wp.0 as i32 == HK_RECORD && with(|s| s.recording) == Some(true);
-            if with(|s| s.suspended) == Some(true) && !stop_rec {
+            let k = match wp.0 as i32 {
+                HK_CAPTURE => K::Capture,
+                HK_DELAY => K::CaptureDelayed,
+                HK_RECORD => K::Record,
+                _ => K::PinClipboard,
+            };
+            let paused = with(|s| s.suspended && (s.paused_keys.is_empty() || s.paused_keys.contains(&k)));
+            if paused == Some(true) && !stop_rec {
                 return LRESULT(0);
             }
             match wp.0 as i32 {
@@ -1052,6 +1067,7 @@ unsafe extern "system" fn app_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
         }
         WM_TIMER if wp.0 == TIMER_UPDATE => {
             SetTimer(Some(hwnd), TIMER_UPDATE, 86_400_000, None);
+            update::clean_temp();
             if with(|s| s.cfg.check_updates) == Some(true) {
                 spawn_update("check");
             }

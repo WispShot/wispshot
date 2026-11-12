@@ -20,6 +20,45 @@ pub enum Theme {
     Dark,
 }
 
+/// A program from `[hotkeys] pause_in_apps`.
+#[derive(Clone, PartialEq, Debug)]
+pub struct PauseApp {
+    /// Lowercase exe name, what the foreground program is matched by ("saplogon.exe").
+    pub exe: String,
+    /// Where the program was found (for its icon and name); may be empty.
+    pub path: String,
+    /// The system-wide shortcuts released there; empty: all of them.
+    pub keys: Vec<K>,
+}
+
+impl PauseApp {
+    pub fn from_path(path: &str) -> Option<PauseApp> {
+        let p = path.trim().trim_matches('"').trim();
+        let name = p.rsplit(['\\', '/']).next().unwrap_or(p).trim().to_lowercase();
+        if name.is_empty() {
+            return None;
+        }
+        let exe = if name.ends_with(".exe") { name } else { name + ".exe" };
+        let path = if p.contains(['\\', '/']) { p.to_string() } else { String::new() };
+        Some(PauseApp { exe, path, keys: vec![] })
+    }
+
+    /// Whether shortcut `k` is released while this program is in front.
+    pub fn pauses(&self, k: K) -> bool {
+        self.keys.is_empty() || self.keys.contains(&k)
+    }
+
+    /// "C:\x\saplogon.exe | capture record" (the part after | only when not all keys pause).
+    fn ini(&self) -> String {
+        let mut s = if self.path.is_empty() { self.exe.clone() } else { self.path.clone() };
+        if !self.keys.is_empty() {
+            let names: Vec<&str> = self.keys.iter().map(|k| keys::def(*k).ini).collect();
+            s += &format!(" | {}", names.join(" "));
+        }
+        s
+    }
+}
+
 #[derive(Clone)]
 pub struct Config {
     /// One binding per `keys::DEFS` entry ("" = off).
@@ -29,9 +68,9 @@ pub struct Config {
     pub theme: Theme,
     /// Release the hotkeys while a full-screen app (game, video) is in front.
     pub pause_fullscreen: bool,
-    /// Release the hotkeys while one of these programs is in front (lowercase exe names,
-    /// "saplogon.exe"): their own keys such as F1 or F3 keep working there.
-    pub pause_apps: Vec<String>,
+    /// Release the hotkeys while one of these programs is in front: their own keys such as
+    /// F1 or F3 keep working there.
+    pub pause_apps: Vec<PauseApp>,
     /// Ask GitHub once a day whether a newer version is out.
     pub check_updates: bool,
     /// WispShot turned off "Print Screen opens screen capture" in Windows; turn it back on
@@ -231,7 +270,7 @@ pub fn save(cfg: &Config) -> std::io::Result<()> {
         ("general", "theme", theme.to_string()),
         ("general", "check_updates", tf(cfg.check_updates)),
         ("hotkeys", "pause_in_fullscreen", tf(cfg.pause_fullscreen)),
-        ("hotkeys", "pause_in_apps", cfg.pause_apps.join(", ")),
+        ("hotkeys", "pause_in_apps", cfg.pause_apps.iter().map(|a| a.ini()).collect::<Vec<_>>().join(", ")),
         ("hotkeys", "snipping_restore", tf(cfg.snipping_restore)),
         ("output", "save_dir", dir(&cfg.save_dir, default_save_dir())),
         ("output", "save_mode", mode(cfg.save_ask)),
@@ -371,18 +410,22 @@ fn parse_kv(text: &str) -> std::collections::HashMap<String, String> {
     kv
 }
 
-/// "SAPlogon, notepad.exe; C:\x\app.exe" -> ["saplogon.exe", "notepad.exe", "app.exe"].
-fn parse_apps(v: &str) -> Vec<String> {
-    let mut out: Vec<String> = vec![];
-    for a in v.split([',', ';']) {
-        let a = a.trim().trim_matches('"');
-        let a = a.rsplit(['\\', '/']).next().unwrap_or(a).trim().to_lowercase();
-        if a.is_empty() {
-            continue;
+/// "SAPlogon, C:\x\app.exe | capture record; notepad.exe": programs, each with the
+/// system-wide shortcuts (ini names) it keeps for itself after "|" (none listed: all).
+fn parse_apps(v: &str) -> Vec<PauseApp> {
+    let mut out: Vec<PauseApp> = vec![];
+    for entry in v.split([',', ';']) {
+        let (path, names) = entry.split_once('|').unwrap_or((entry, ""));
+        let Some(mut app) = PauseApp::from_path(path) else { continue };
+        for n in names.split_whitespace() {
+            if let Some(d) = DEFS.iter().find(|d| d.scope == Scope::Global && d.ini.eq_ignore_ascii_case(n)) {
+                if !app.keys.contains(&d.k) {
+                    app.keys.push(d.k);
+                }
+            }
         }
-        let a = if a.ends_with(".exe") { a } else { a + ".exe" };
-        if !out.contains(&a) {
-            out.push(a);
+        if !out.iter().any(|a| a.exe == app.exe) {
+            out.push(app);
         }
     }
     out
@@ -490,4 +533,22 @@ pub fn load() -> Config {
 /// Switch the theme for this process (Settings applies it before the tray reloads).
 pub fn set_theme(t: Theme) {
     THEME.store(t as u8, Ordering::Relaxed);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pause_apps_round_trip() {
+        let v = parse_apps(r"SAPlogon, C:\Program Files (x86)\SAP\excel.exe | capture record; notepad.exe | nope");
+        assert_eq!(v.len(), 3);
+        assert_eq!((v[0].exe.as_str(), v[0].path.as_str()), ("saplogon.exe", ""));
+        assert_eq!(v[1].exe, "excel.exe");
+        assert_eq!(v[1].keys, vec![K::Capture, K::Record]);
+        assert!(v[1].pauses(K::Record) && !v[1].pauses(K::PinClipboard));
+        assert!(v[2].keys.is_empty() && v[2].pauses(K::Capture));
+        assert_eq!(v[1].ini(), r"C:\Program Files (x86)\SAP\excel.exe | capture record");
+        assert_eq!(parse_apps(&v.iter().map(|a| a.ini()).collect::<Vec<_>>().join(", ")), v);
+    }
 }

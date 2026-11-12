@@ -5,6 +5,7 @@
 use crate::config::{self, Config, Theme};
 use crate::gfx::*;
 use crate::i18n::{self, t, tf};
+use crate::img::Img;
 use crate::keys::{self, Chord, Scope, DEFS, K};
 use crate::output::{self, WideZ};
 use std::cell::RefCell;
@@ -28,8 +29,6 @@ const NAV_W: f32 = 232.0;
 /// Page content scrolls below the fixed page title.
 const VIEW_TOP: f32 = 76.0;
 const TIMER_TOAST: usize = 1;
-/// Posted after Print Screen became a shortcut: ask about Windows' own use of it (outside any borrow).
-const WM_APP_ASK_SNIP: u32 = WM_APP + 1;
 const KBD_KEY: PCWSTR = w!("Control Panel\\Keyboard");
 const SNIP_VALUE: PCWSTR = w!("PrintScreenKeyForSnippingEnabled");
 const VK_PRINT: u16 = 0x2C;
@@ -54,11 +53,43 @@ fn set_snipping(on: bool) -> bool {
     }
 }
 
-/// Some system-wide shortcut is Print Screen (with or without modifiers).
+/// The shortcuts the tray holds (and a program from the list can keep for itself).
+const TRAY_KEYS: [K; 4] = [K::Capture, K::CaptureDelayed, K::Record, K::PinClipboard];
+
+/// A Direct2D bitmap of a straight-alpha icon.
+fn icon_bitmap(rt: &ID2D1RenderTarget, img: &Img) -> Option<ID2D1Bitmap> {
+    let px: Vec<u32> = img
+        .px
+        .iter()
+        .map(|&p| {
+            let a = p >> 24;
+            let m = |sh: u32| (((p >> sh) & 0xFF) * a / 255) << sh;
+            (a << 24) | m(16) | m(8) | m(0)
+        })
+        .collect();
+    unsafe {
+        rt.CreateBitmap(
+            D2D_SIZE_U { width: img.w as u32, height: img.h as u32 },
+            Some(px.as_ptr() as *const _),
+            (img.w * 4) as u32,
+            &D2D1_BITMAP_PROPERTIES {
+                pixelFormat: D2D1_PIXEL_FORMAT {
+                    format: windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM,
+                    alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
+                },
+                dpiX: 96.0,
+                dpiY: 96.0,
+            },
+        )
+        .ok()
+    }
+}
+
+/// Some system-wide shortcut is Print Screen on its own (the Windows setting is only about that key).
 fn uses_print(cfg: &Config) -> bool {
     DEFS.iter()
         .filter(|d| d.scope == Scope::Global)
-        .any(|d| keys::parse(cfg.key(d.k)).map(|c| c.vk == VK_PRINT).unwrap_or(false))
+        .any(|d| keys::parse(cfg.key(d.k)).map(|c| c.vk == VK_PRINT && c.mods == 0).unwrap_or(false))
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -73,6 +104,8 @@ enum Tg {
     History,
     Autostart,
     Updates,
+    /// Print Screen takes the screenshot (and Windows lets go of it).
+    PrintKey,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -103,6 +136,13 @@ enum Act {
     /// Add a program whose own keys win over the shortcuts (`pause_in_apps`).
     AddApp,
     RemoveApp(usize),
+    /// A program from the open-programs list.
+    PickApp(usize),
+    BrowseApp,
+    CancelPick,
+    /// Whether shortcut K stays with program i.
+    AppKey(usize, K),
+    CheckUpdates,
     Sponsor,
 }
 
@@ -223,6 +263,10 @@ struct St {
     scroll: f32,
     /// Height of the current page's content (for the scroll limit).
     content_h: f32,
+    /// Name, icon and path of each `pause_apps` entry (same order).
+    app_info: Vec<(String, Option<Img>, String)>,
+    /// The open-programs list while "Add program" is open.
+    picking: Option<Vec<crate::apps::Prog>>,
 }
 
 thread_local! {
@@ -358,8 +402,11 @@ pub fn open() -> bool {
                 tray_mb: tray_memory(),
                 scroll: 0.0,
                 content_h: 0.0,
+                app_info: vec![],
+                picking: None,
             })
         });
+        with(|s| s.refresh_apps());
         title_bar(hwnd, light);
         let _ = ShowWindow(hwnd, SW_SHOW);
         let _ = SetForegroundWindow(hwnd);
@@ -454,6 +501,7 @@ impl St {
             Tg::History => c.history,
             Tg::Autostart => self.autostart,
             Tg::Updates => c.check_updates,
+            Tg::PrintKey => keys::parse(c.key(K::Capture)).map(|k| k.vk == VK_PRINT && k.mods == 0).unwrap_or(false),
         }
     }
 
@@ -571,7 +619,16 @@ impl St {
                     reserve: f32,
                     hits: &mut Hits,
                     ctl: &mut dyn FnMut(&St, D2D_RECT_F, &mut Hits)| {
-            let h = if sub.is_empty() { 56.0 } else { 70.0 };
+            // a wide control (many options) goes under the text, so the text keeps the whole width
+            let stacked = reserve >= 380.0;
+            let reserve = if stacked { 18.0 } else { reserve };
+            let h = if stacked {
+                116.0
+            } else if sub.is_empty() {
+                56.0
+            } else {
+                70.0
+            };
             let r = rc(x0, *y, x1, *y + h);
             rrect(rt, r, 6.0, p.card, p.card_border);
             if sub.is_empty() {
@@ -581,7 +638,7 @@ impl St {
                 let ff = if reserve == FOLDER_RESERVE { &f.path } else { &f.sub };
                 txt(rt, sub, ff, rc(x0 + 18.0, *y + 35.0, x1 - reserve, *y + 55.0), p.sub);
             }
-            ctl(st, r, hits);
+            ctl(st, if stacked { rc(r.left, r.top + 64.0, r.right, r.bottom - 6.0) } else { r }, hits);
             *y += h + 4.0;
         };
         match self.page {
@@ -595,33 +652,22 @@ impl St {
                     &mut body,
                     &mut |st, r, h| st.toggle(rt, r, Tg::PauseFs, h),
                 );
-                // programs that keep their own keys, with their list right under the card
-                let bw = self.g.measure(t("keys.apps_add"), &f.body).0 + 32.0;
+                card(self, &mut y, t("keys.print"), t("keys.print_sub"), 140.0, &mut body, &mut |st, r, h| {
+                    st.toggle(rt, r, Tg::PrintKey, h)
+                });
+                // programs that keep their own keys: the card, then the open-programs picker, then the list
+                let label = if self.picking.is_some() { t("common.cancel") } else { t("keys.apps_add") };
+                let bw = self.g.measure(label, &f.body).0 + 32.0;
                 card(self, &mut y, t("keys.apps"), t("keys.apps_sub"), bw + 40.0, &mut body, &mut |st, r, h| {
                     let cy = (r.top + r.bottom) / 2.0;
-                    st.button(
-                        rt,
-                        rc(r.right - 18.0 - bw, cy - 16.0, r.right - 18.0, cy + 16.0),
-                        t("keys.apps_add"),
-                        Act::AddApp,
-                        h,
-                    );
+                    let a = if st.picking.is_some() { Act::CancelPick } else { Act::AddApp };
+                    st.button(rt, rc(r.right - 18.0 - bw, cy - 16.0, r.right - 18.0, cy + 16.0), label, a, h);
                 });
-                let apps = &self.cfg.pause_apps;
-                if !apps.is_empty() {
-                    let rh = 42.0;
-                    rrect(rt, rc(x0, y, x1, y + rh * apps.len() as f32), 6.0, p.card, p.card_border);
-                    let rw = self.g.measure(t("keys.apps_remove"), &f.body).0 + 28.0;
-                    for (i, a) in apps.iter().enumerate() {
-                        if i > 0 {
-                            rrect(rt, rc(x0 + 1.0, y, x1 - 1.0, y + 1.0), 0.0, p.divider, 0);
-                        }
-                        txt(rt, a, &f.body, rc(x0 + 18.0, y, x1 - rw - 40.0, y + rh), p.text);
-                        let b = rc(x1 - 18.0 - rw, y + 7.0, x1 - 18.0, y + rh - 7.0);
-                        self.button(rt, b, t("keys.apps_remove"), Act::RemoveApp(i), &mut body);
-                        y += rh;
-                    }
-                    y += 4.0;
+                if let Some(list) = &self.picking {
+                    y = self.draw_picker(rt, list, y, &mut body);
+                }
+                if !self.cfg.pause_apps.is_empty() {
+                    y = self.draw_apps(rt, y, &mut body);
                 }
                 txt(rt, t("keys.how_to"), &f.sub, rc(x0 + 4.0, y + 2.0, x1, y + 26.0), p.sub);
                 y += 30.0;
@@ -793,6 +839,26 @@ impl St {
                     None => t("about.memory_off").to_string(),
                 };
                 card(self, &mut y, t("about.memory"), &mem, 20.0, &mut body, &mut |_, _, _| {});
+                let label = t("about.check_updates");
+                let bw = self.g.measure(label, &f.body).0 + 32.0;
+                card(
+                    self,
+                    &mut y,
+                    t("about.updates"),
+                    t("about.updates_sub"),
+                    bw + 40.0,
+                    &mut body,
+                    &mut |st, r, h| {
+                        let cy = (r.top + r.bottom) / 2.0;
+                        st.button(
+                            rt,
+                            rc(r.right - 18.0 - bw, cy - 16.0, r.right - 18.0, cy + 16.0),
+                            label,
+                            Act::CheckUpdates,
+                            h,
+                        );
+                    },
+                );
                 card(self, &mut y, t("about.license"), t("about.license_sub"), 20.0, &mut body, &mut |_, _, _| {});
                 card(self, &mut y, t("about.author"), "Efe Kaputlu", 20.0, &mut body, &mut |_, _, _| {});
                 card(self, &mut y, t("about.support"), t("about.support_sub"), 150.0, &mut body, &mut |st, r, h| {
@@ -882,6 +948,131 @@ impl St {
                 &white,
             );
         }
+    }
+
+    /// A program icon (straight alpha) at x, y, `s` px; a plain tile when there is none.
+    fn app_icon(&self, rt: &ID2D1RenderTarget, icon: Option<&Img>, x: f32, y: f32, s: f32) {
+        let r = rc(x, y, x + s, y + s);
+        match icon.and_then(|i| icon_bitmap(rt, i)) {
+            Some(b) => unsafe {
+                rt.DrawBitmap(&b, Some(&r), 1.0, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, None);
+            },
+            None => {
+                rrect(rt, r, 4.0, self.p.btn, self.p.btn_border);
+                if let Some(f) = &self.f {
+                    txt(rt, "\u{ED35}", &f.icon, rc(x + 2.0, y, x + s, y + s), self.p.sub);
+                }
+            }
+        }
+    }
+
+    /// The open-programs list under "Add program"; returns the new y.
+    fn draw_picker(&self, rt: &ID2D1RenderTarget, list: &[crate::apps::Prog], y: f32, hits: &mut Hits) -> f32 {
+        let Some(f) = &self.f else { return y };
+        let p = &self.p;
+        let (x0, x1) = (NAV_W + 32.0, W - 32.0);
+        let rh = 44.0;
+        let foot = 52.0;
+        let head = 34.0;
+        let h = head + rh * list.len() as f32 + foot;
+        rrect(rt, rc(x0, y, x1, y + h), 6.0, p.card, p.accent);
+        let title = if list.is_empty() { t("keys.apps_none_open") } else { t("keys.apps_open") };
+        txt(rt, title, &f.sub, rc(x0 + 18.0, y + 10.0, x1 - 18.0, y + head), p.sub);
+        let mut ry = y + head;
+        for (i, prog) in list.iter().enumerate() {
+            let r = rc(x0 + 6.0, ry, x1 - 6.0, ry + rh);
+            let added = self.cfg.pause_apps.iter().any(|a| a.exe == prog.exe);
+            let a = Act::PickApp(i);
+            if !added && self.hover == Some(a) {
+                rrect(rt, r, 4.0, p.hover, 0);
+            }
+            self.app_icon(rt, prog.icon.as_ref(), x0 + 18.0, ry + 10.0, 24.0);
+            let col = if added { p.sub } else { p.text };
+            txt(rt, &prog.name, &f.body, rc(x0 + 54.0, ry, x1 - 200.0, ry + rh), col);
+            let right = if added { t("keys.apps_on_list").to_string() } else { prog.exe.clone() };
+            let tw = self.g.measure(&right, &f.sub).0;
+            txt(rt, &right, &f.sub, rc(x1 - 18.0 - tw, ry, x1 - 12.0, ry + rh), p.sub);
+            if !added {
+                hits.push((r, a));
+            }
+            ry += rh;
+        }
+        let label = t("keys.apps_browse");
+        let bw = self.g.measure(label, &f.body).0 + 32.0;
+        self.button(rt, rc(x0 + 18.0, ry + 10.0, x0 + 18.0 + bw, ry + 42.0), label, Act::BrowseApp, hits);
+        y + h + 4.0
+    }
+
+    /// The saved programs: icon, name, the shortcuts left to each, Remove; returns the new y.
+    fn draw_apps(&self, rt: &ID2D1RenderTarget, mut y: f32, hits: &mut Hits) -> f32 {
+        let Some(f) = &self.f else { return y };
+        let p = &self.p;
+        let (x0, x1) = (NAV_W + 32.0, W - 32.0);
+        let rh = 76.0;
+        let apps = &self.cfg.pause_apps;
+        rrect(rt, rc(x0, y, x1, y + rh * apps.len() as f32), 6.0, p.card, p.card_border);
+        let rw = self.g.measure(t("keys.apps_remove"), &f.body).0 + 28.0;
+        for (i, a) in apps.iter().enumerate() {
+            if i > 0 {
+                rrect(rt, rc(x0 + 1.0, y, x1 - 1.0, y + 1.0), 0.0, p.divider, 0);
+            }
+            let (name, icon) = match self.app_info.get(i) {
+                Some((n, ic, _)) => (n.as_str(), ic.as_ref()),
+                None => (a.exe.as_str(), None),
+            };
+            self.app_icon(rt, icon, x0 + 18.0, y + 12.0, 24.0);
+            txt(rt, name, &f.body, rc(x0 + 54.0, y + 8.0, x1 - rw - 40.0, y + 32.0), p.text);
+            let b = rc(x1 - 18.0 - rw, y + 8.0, x1 - 18.0, y + 36.0);
+            self.button(rt, b, t("keys.apps_remove"), Act::RemoveApp(i), hits);
+            // the shortcuts this program keeps: lit chips
+            let lead = t("keys.apps_keys");
+            let lw = self.g.measure(lead, &f.sub).0;
+            txt(rt, lead, &f.sub, rc(x0 + 54.0, y + 42.0, x0 + 60.0 + lw, y + 66.0), p.sub);
+            let mut cx = x0 + 62.0 + lw;
+            for k in TRAY_KEYS {
+                let label = keys::display(self.cfg.key(k));
+                if label.is_empty() {
+                    continue;
+                }
+                let cw = self.g.measure(&label, &f.sub).0 + 20.0;
+                let r = rc(cx, y + 42.0, cx + cw, y + 66.0);
+                let act = Act::AppKey(i, k);
+                if a.pauses(k) {
+                    rrect(rt, r, 12.0, p.accent, 0);
+                    txt(rt, &label, &f.sub, rc(r.left + 10.0, r.top, r.right, r.bottom), p.on_accent);
+                } else {
+                    let bg = if self.hover == Some(act) { p.btn_hover } else { p.btn };
+                    rrect(rt, r, 12.0, bg, p.btn_border);
+                    txt(rt, &label, &f.sub, rc(r.left + 10.0, r.top, r.right, r.bottom), p.text);
+                }
+                hits.push((r, act));
+                cx += cw + 6.0;
+            }
+            y += rh;
+        }
+        y + 4.0
+    }
+
+    /// Names and icons of the saved programs (after a change to the list).
+    fn refresh_apps(&mut self) {
+        let size = (24.0 * self.dpi as f32 / 96.0).round() as i32;
+        self.app_info = self.cfg.pause_apps.iter().map(|a| crate::apps::info(&a.exe, &a.path, size)).collect();
+    }
+
+    fn add_app(&mut self, path: &str) {
+        let Some(mut app) = config::PauseApp::from_path(path) else { return };
+        self.picking = None;
+        if self.cfg.pause_apps.iter().any(|a| a.exe == app.exe) {
+            self.show_toast(&tf("keys.apps_already", &[&app.exe]), false);
+            return;
+        }
+        if app.path.is_empty() {
+            app.path = path.to_string();
+        }
+        self.cfg.pause_apps.push(app);
+        self.refresh_apps();
+        let name = self.app_info.last().map(|i| i.0.clone()).unwrap_or_default();
+        self.commit(&tf("keys.apps_added", &[&name]));
     }
 
     fn toggle(&self, rt: &ID2D1RenderTarget, card: D2D_RECT_F, tg: Tg, hits: &mut Hits) {
@@ -1055,6 +1246,25 @@ impl St {
                     Tg::Detect => c.detect_elements = v,
                     Tg::History => c.history = v,
                     Tg::Updates => c.check_updates = v,
+                    Tg::PrintKey => {
+                        if v {
+                            if keys::clash(&c.keys, K::Capture, Chord { vk: VK_PRINT, mods: 0 }).is_some() {
+                                self.show_toast(t("keys.print_taken"), true);
+                                return;
+                            }
+                            c.set_key(K::Capture, "PrintScreen".into());
+                            if snipping_on() {
+                                if set_snipping(false) {
+                                    c.snipping_restore = true;
+                                } else {
+                                    self.show_toast(t("snip.failed"), true);
+                                }
+                            }
+                        } else {
+                            // back to the default; commit() gives the key back to Windows
+                            c.set_key(K::Capture, keys::def(K::Capture).default.into());
+                        }
+                    }
                     Tg::Autostart => {
                         crate::set_autostart(v);
                         self.autostart = crate::autostart_enabled();
@@ -1097,12 +1307,50 @@ impl St {
                 }
                 self.commit(t("settings.saved"));
             }
-            Act::Browse(_) | Act::AddApp => {} // handled in wndproc: menus and dialogs must not run inside a borrow
+            Act::Browse(_) | Act::BrowseApp => {} // handled in wndproc: dialogs must not run inside a borrow
+            Act::AddApp => {
+                let size = (24.0 * self.dpi as f32 / 96.0).round() as i32;
+                self.picking = Some(crate::apps::running(size));
+            }
             Act::RemoveApp(i) => {
                 if i < self.cfg.pause_apps.len() {
-                    let name = self.cfg.pause_apps.remove(i);
+                    let name = self.app_info.get(i).map(|n| n.0.clone()).unwrap_or_default();
+                    self.cfg.pause_apps.remove(i);
+                    self.refresh_apps();
                     self.commit(&tf("keys.apps_removed", &[&name]));
                 }
+            }
+            Act::PickApp(i) => {
+                if let Some(path) = self.picking.as_ref().and_then(|l| l.get(i)).map(|p| p.path.clone()) {
+                    self.add_app(&path);
+                }
+            }
+            Act::CancelPick => self.picking = None,
+            Act::AppKey(i, k) => {
+                let Some(app) = self.cfg.pause_apps.get_mut(i) else { return };
+                let mut on: Vec<K> = TRAY_KEYS.iter().copied().filter(|x| app.pauses(*x)).collect();
+                if let Some(at) = on.iter().position(|x| *x == k) {
+                    if on.len() == 1 {
+                        self.show_toast(t("keys.apps_keep_one"), true);
+                        return;
+                    }
+                    on.remove(at);
+                } else {
+                    on.push(k);
+                }
+                // all of them is the plain form ("saplogon.exe" with nothing after it)
+                app.keys = if TRAY_KEYS.iter().all(|x| on.contains(x)) {
+                    vec![]
+                } else {
+                    TRAY_KEYS.iter().copied().filter(|x| on.contains(x)).collect()
+                };
+                self.commit(t("settings.saved"));
+            }
+            Act::CheckUpdates => {
+                if let Ok(exe) = std::env::current_exe() {
+                    let _ = std::process::Command::new(exe).args(["--update", "checknow"]).spawn();
+                }
+                self.show_toast(t("update.checking"), false);
             }
             Act::OpenDir(video) => {
                 crate::open_path(if video { &self.cfg.video_dir } else { &self.cfg.save_dir }, false)
@@ -1185,11 +1433,6 @@ impl St {
         self.cfg.set_key(k, text);
         self.stop_recording();
         self.commit(if cleared { t("keys.removed") } else { t("keys.saved") });
-        if !cleared && keys::def(k).scope == Scope::Global && vk == VK_PRINT && snipping_on() {
-            unsafe {
-                let _ = PostMessageW(Some(self.hwnd), WM_APP_ASK_SNIP, WPARAM(0), LPARAM(0));
-            }
-        }
         true
     }
 
@@ -1230,68 +1473,7 @@ fn browse(owner: HWND, cur: &std::path::Path) -> Option<std::path::PathBuf> {
     }
 }
 
-/// Programs that should never be paused for: the shell's hosts stand for many apps at once.
-const NOT_AN_APP: [&str; 4] =
-    ["applicationframehost.exe", "textinputhost.exe", "shellexperiencehost.exe", "searchhost.exe"];
-
-/// A menu of the programs with a window open now, plus "Browse...". Returns an exe name.
-fn pick_app(owner: HWND) -> Option<String> {
-    unsafe extern "system" fn each(h: HWND, lp: LPARAM) -> BOOL {
-        let found = &mut *(lp.0 as *mut Vec<(String, String)>);
-        let ex = GetWindowLongW(h, GWL_EXSTYLE) as u32;
-        if !IsWindowVisible(h).as_bool()
-            || ex & WS_EX_TOOLWINDOW.0 != 0
-            || GetWindow(h, GW_OWNER).map(|o| !o.is_invalid()).unwrap_or(false)
-            || crate::capture::is_cloaked(h)
-        {
-            return true.into();
-        }
-        let mut buf = [0u16; 256];
-        let n = GetWindowTextW(h, &mut buf) as usize;
-        let title = String::from_utf16_lossy(&buf[..n]);
-        if title.trim().is_empty() {
-            return true.into();
-        }
-        if let Some(exe) = crate::window_exe(h) {
-            if !NOT_AN_APP.contains(&exe.as_str()) && !found.iter().any(|(e, _)| *e == exe) {
-                found.push((exe, title));
-            }
-        }
-        true.into()
-    }
-    const BROWSE: usize = 0xFFFF;
-    let mut found: Vec<(String, String)> = vec![];
-    unsafe {
-        let _ = EnumWindows(Some(each), LPARAM(&mut found as *mut _ as isize));
-        found.sort();
-        let menu = CreatePopupMenu().ok()?;
-        for (i, (exe, title)) in found.iter().enumerate() {
-            let title: String = if title.chars().count() > 48 {
-                title.chars().take(47).chain(Some('…')).collect()
-            } else {
-                title.clone()
-            };
-            let w = output::wide(&format!("{}\t{}", title.replace('&', "&&"), exe));
-            let _ = AppendMenuW(menu, MF_STRING, i + 1, PCWSTR(w.as_ptr()));
-        }
-        if !found.is_empty() {
-            let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
-        }
-        let w = output::wide(t("keys.apps_browse"));
-        let _ = AppendMenuW(menu, MF_STRING, BROWSE, PCWSTR(w.as_ptr()));
-        let mut pt = POINT::default();
-        let _ = GetCursorPos(&mut pt);
-        let cmd = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, None, owner, None).0 as usize;
-        let _ = DestroyMenu(menu);
-        match cmd {
-            0 => None,
-            BROWSE => browse_exe(owner),
-            i => found.get(i - 1).map(|(e, _)| e.clone()),
-        }
-    }
-}
-
-/// File picker for a program (.exe); returns its lowercase file name.
+/// File picker for a program (.exe); returns its path.
 fn browse_exe(owner: HWND) -> Option<String> {
     unsafe {
         let dlg = CoCreateInstance::<_, IFileOpenDialog>(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
@@ -1309,8 +1491,7 @@ fn browse_exe(owner: HWND) -> Option<String> {
         let p = it.GetDisplayName(SIGDN_FILESYSPATH).ok()?;
         let s = p.to_string().ok();
         CoTaskMemFree(Some(p.0 as *const _));
-        let s = s?;
-        Some(s.rsplit(['\\', '/']).next().unwrap_or(&s).to_lowercase())
+        s
     }
 }
 
@@ -1428,16 +1609,9 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
                         });
                     }
                 }
-                Some(Act::AddApp) if pressed == h => {
-                    if let Some(name) = pick_app(hwnd) {
-                        with(|s| {
-                            if s.cfg.pause_apps.contains(&name) {
-                                s.show_toast(&tf("keys.apps_already", &[&name]), false);
-                            } else {
-                                s.cfg.pause_apps.push(name.clone());
-                                s.commit(&tf("keys.apps_added", &[&name]));
-                            }
-                        });
+                Some(Act::BrowseApp) if pressed == h => {
+                    if let Some(path) = browse_exe(hwnd) {
+                        with(|s| s.add_app(&path));
                     }
                 }
                 Some(a) if pressed == Some(a) => {
@@ -1488,22 +1662,6 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             DefWindowProcW(hwnd, msg, wp, lp)
         }
         WM_SYSCHAR if with(|s| s.recording.is_some()) == Some(true) => LRESULT(0),
-        WM_APP_ASK_SNIP => {
-            let (title, body) = (output::wide(t("snip.title")), output::wide(t("snip.ask")));
-            let r = MessageBoxW(Some(hwnd), PCWSTR(body.as_ptr()), PCWSTR(title.as_ptr()), MB_YESNO | MB_ICONQUESTION);
-            if r == IDYES {
-                with(|s| {
-                    if set_snipping(false) {
-                        s.cfg.snipping_restore = true;
-                        s.commit(t("snip.done"));
-                    } else {
-                        s.show_toast(t("snip.failed"), true);
-                    }
-                });
-                redraw(hwnd);
-            }
-            LRESULT(0)
-        }
         WM_TIMER if wp.0 == TIMER_TOAST => {
             let _ = KillTimer(Some(hwnd), TIMER_TOAST);
             with(|s| s.toast = None);

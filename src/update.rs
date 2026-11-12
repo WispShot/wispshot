@@ -87,8 +87,10 @@ fn install(v: &str) -> Result<bool, String> {
     if sha256_hex(&setup.body).as_deref() != Some(want.as_str()) {
         return Err("the download does not match its checksum".into());
     }
-    let dir = std::env::temp_dir().join("WispShot-update");
-    let _ = std::fs::create_dir_all(&dir);
+    // a new folder each time (nothing can be waiting in it); old ones go with clean_temp()
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    let dir = std::env::temp_dir().join(format!("WispShot-update-{}-{stamp}", std::process::id()));
+    std::fs::create_dir(&dir).map_err(|e| e.to_string())?;
     let path: PathBuf = dir.join(&name);
     std::fs::write(&path, &setup.body).map_err(|e| e.to_string())?;
     // the setup closes the running WispShot, replaces it and starts it again (/restartapp);
@@ -98,6 +100,16 @@ fn install(v: &str) -> Result<bool, String> {
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(true)
+}
+
+/// Delete the setups earlier updates downloaded (a running one stays until next time).
+pub fn clean_temp() {
+    let Ok(rd) = std::fs::read_dir(std::env::temp_dir()) else { return };
+    for e in rd.flatten() {
+        if e.file_name().to_string_lossy().starts_with("WispShot-update") {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
 }
 
 /// `--update check`: tell the tray when a newer version is out. `--update install`: install it.
@@ -112,6 +124,21 @@ pub fn run(what: &str) -> i32 {
             }
             0
         }
+        // from Settings: say what was found either way
+        "checknow" => match latest() {
+            Ok(v) if newer(&v) => {
+                crate::ipc_send(crate::IPC_UPDATE, &v);
+                0
+            }
+            Ok(_) => {
+                crate::notify("WispShot", &tf("update.up_to_date", &[env!("CARGO_PKG_VERSION")]));
+                0
+            }
+            Err(e) => {
+                crate::notify(t("update.failed_title"), &tf("update.failed", &[&e]));
+                1
+            }
+        },
         "install" => match latest() {
             Ok(v) if newer(&v) => match install(&v) {
                 Ok(_) => 0,

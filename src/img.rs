@@ -45,17 +45,41 @@ impl Img {
         }
     }
 
-    /// Nearest-neighbour integer upscale (used to help OCR on tiny text).
-    pub fn upscale(&self, f: i32) -> Img {
-        let (w, h) = (self.w * f, self.h * f);
-        let mut px = Vec::with_capacity((w * h) as usize);
-        for y in 0..h {
-            let sr = ((y / f) * self.w) as usize;
-            for x in 0..w {
-                px.push(self.px[sr + (x / f) as usize]);
+    /// Smooth (bilinear) integer upscale, written row by row into `dst` (BGRA bytes,
+    /// `stride` bytes per row). Screen text is read by OCR far better this way than
+    /// with blocky pixels.
+    pub fn upscale_into(&self, f: i32, dst: &mut [u8], stride: usize) {
+        if self.w <= 0 || self.h <= 0 {
+            return;
+        }
+        // for each output column/row: the two source pixels and the weight (0..256) of the second
+        let taps = |n: i32, len: i32| -> Vec<(usize, usize, u32)> {
+            (0..n * f)
+                .map(|o| {
+                    let s = ((2 * o + 1) * 128 / f - 128).clamp(0, (len - 1) * 256);
+                    let i = s / 256;
+                    ((i) as usize, (i + 1).min(len - 1) as usize, (s % 256) as u32)
+                })
+                .collect()
+        };
+        let (xs, ys) = (taps(self.w, self.w), taps(self.h, self.h));
+        let mix = |a: u32, b: u32, t: u32| -> u32 {
+            let lo = ((a & 0x00FF_00FF) * (256 - t) + (b & 0x00FF_00FF) * t) >> 8;
+            let hi = ((a >> 8) & 0x00FF_00FF) * (256 - t) + ((b >> 8) & 0x00FF_00FF) * t;
+            (lo & 0x00FF_00FF) | (hi & 0xFF00_FF00)
+        };
+        let w = self.w as usize;
+        let mut row = vec![0u32; xs.len()];
+        for (oy, &(y0, y1, ty)) in ys.iter().enumerate() {
+            let (r0, r1) = (&self.px[y0 * w..y0 * w + w], &self.px[y1 * w..y1 * w + w]);
+            for (o, &(x0, x1, tx)) in row.iter_mut().zip(xs.iter()) {
+                *o = mix(mix(r0[x0], r0[x1], tx), mix(r1[x0], r1[x1], tx), ty);
+            }
+            let out = &mut dst[oy * stride..oy * stride + row.len() * 4];
+            for (d, b) in out.iter_mut().zip(row.iter().flat_map(|p| p.to_le_bytes())) {
+                *d = b;
             }
         }
-        Img { w, h, px }
     }
 }
 

@@ -4,10 +4,13 @@
 
 use crate::img::Img;
 use crate::output;
+use std::sync::RwLock;
 use windows::core::*;
+use windows::Globalization::Language;
 use windows::Graphics::Imaging::*;
 use windows::Media::Ocr::*;
 use windows::Security::Cryptography::CryptographicBuffer;
+use windows::System::UserProfile::GlobalizationPreferences;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -16,36 +19,135 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 pub const WM_APP_OCR: u32 = WM_APP + 30;
 
+/// `[capture] ocr_language` from the settings: "auto" (or empty) or a language tag.
+static LANGUAGE: RwLock<String> = RwLock::new(String::new());
+
+pub fn set_language(tag: &str) {
+    if let Ok(mut l) = LANGUAGE.write() {
+        *l = tag.trim().to_string();
+    }
+}
+
+/// Upscaled images stay under this many pixels (memory and time stay small).
+const PIXEL_BUDGET: i64 = 9_000_000;
+
+/// A word "looks native" for a language with extra letters when it has a non-ASCII letter.
+/// Text in that language has many such words; English read by its engine has only a few
+/// misreads ("Wındow"). Below this share the text is taken to be English.
+const NATIVE_SHARE: f32 = 0.12;
+
+fn engine_for(lang: &Language) -> Option<OcrEngine> {
+    if OcrEngine::IsLanguageSupported(lang).unwrap_or(false) {
+        OcrEngine::TryCreateFromLanguage(lang).ok()
+    } else {
+        None
+    }
+}
+
+fn is_english(tag: &str) -> bool {
+    let t = tag.to_ascii_lowercase();
+    t == "en" || t.starts_with("en-")
+}
+
+/// The engine to read with, and an English one to fall back on when the text turns out to
+/// be English. The engine Windows picks on its own (the first profile language) reads
+/// Turkish badly on an English Windows and English badly on a Turkish one, so with a
+/// Latin-script language besides English in the user's list we read with that first.
+fn engines() -> Result<(OcrEngine, Option<OcrEngine>)> {
+    let want = LANGUAGE.read().map(|l| l.clone()).unwrap_or_default();
+    if !want.is_empty() && !want.eq_ignore_ascii_case("auto") {
+        if let Some(e) = Language::CreateLanguage(&HSTRING::from(&want)).ok().and_then(|l| engine_for(&l)) {
+            return Ok((e, None));
+        }
+    }
+    let mut native = None;
+    let mut english = None;
+    if let Ok(list) = GlobalizationPreferences::Languages() {
+        for tag in list {
+            let Ok(lang) = Language::CreateLanguage(&tag) else { continue };
+            if !OcrEngine::IsLanguageSupported(&lang).unwrap_or(false) {
+                continue;
+            }
+            if is_english(&tag.to_string_lossy()) {
+                english.get_or_insert(lang);
+            } else if native.is_none() && lang.Script().map(|s| s == "Latn").unwrap_or(false) {
+                native = Some(lang);
+            }
+        }
+    }
+    let Some(native) = native.and_then(|l| engine_for(&l)) else {
+        return Ok((OcrEngine::TryCreateFromUserProfileLanguages()?, None));
+    };
+    if english.is_none() {
+        english = OcrEngine::AvailableRecognizerLanguages().ok().and_then(|v| {
+            v.into_iter().find(|l| l.LanguageTag().map(|t| is_english(&t.to_string_lossy())).unwrap_or(false))
+        });
+    }
+    Ok((native, english.and_then(|l| engine_for(&l))))
+}
+
+/// Whether enough of the words have letters beyond ASCII (see NATIVE_SHARE).
+fn looks_native(res: &OcrResult) -> bool {
+    let (mut words, mut native) = (0, 0);
+    for line in res.Lines().into_iter().flatten() {
+        for w in line.Words().into_iter().flatten() {
+            let t = w.Text().map(|t| t.to_string_lossy()).unwrap_or_default();
+            if t.chars().any(|c| c.is_alphabetic()) {
+                words += 1;
+                if t.chars().any(|c| c.is_alphabetic() && !c.is_ascii()) {
+                    native += 1;
+                }
+            }
+        }
+    }
+    words == 0 || native as f32 >= words as f32 * NATIVE_SHARE
+}
+
 /// Run the engine; returns the result and the upscale factor used.
 fn run(img: &Img) -> Result<(OcrResult, i32)> {
     unsafe {
         let _ = RoInitialize(RO_INIT_MULTITHREADED);
     }
-    let engine = OcrEngine::TryCreateFromUserProfileLanguages()?;
     let max = OcrEngine::MaxImageDimension().unwrap_or(10000) as i32;
-    // Small text is recognised far better when upscaled.
-    let mut f = 1;
-    while img.w * (f + 1) <= max && img.h * (f + 1) <= max && img.h * f < 300 && f < 4 {
-        f += 1;
+    // Screen text is small for the engine: 2-3x (smoothly) reads it much better.
+    let fits =
+        |f: i32| img.w * f <= max && img.h * f <= max && (img.w as i64 * img.h as i64) * (f * f) as i64 <= PIXEL_BUDGET;
+    let f = [3, 2].into_iter().find(|&f| fits(f)).unwrap_or(1);
+    let bmp = if f > 1 {
+        let bmp = SoftwareBitmap::Create(BitmapPixelFormat::Bgra8, img.w * f, img.h * f)?;
+        {
+            let buf = bmp.LockBuffer(BitmapBufferAccessMode::Write)?;
+            let stride = buf.GetPlaneDescription(0)?.Stride as usize;
+            let mref = buf.CreateReference()?;
+            let access: IMemoryBufferByteAccess = mref.cast()?;
+            let (mut p, mut cap) = (std::ptr::null_mut(), 0u32);
+            unsafe { access.GetBuffer(&mut p, &mut cap)? };
+            let dst = unsafe { std::slice::from_raw_parts_mut(p, cap as usize) };
+            img.upscale_into(f, dst, stride);
+            mref.Close()?;
+            buf.Close()?;
+        }
+        bmp
+    } else {
+        let (w, h) = (img.w.min(max), img.h.min(max));
+        let cropped;
+        let src = if w != img.w || h != img.h {
+            cropped = img.crop(0, 0, w, h);
+            &cropped
+        } else {
+            img
+        };
+        let buf = CryptographicBuffer::CreateFromByteArray(src.as_bytes())?;
+        SoftwareBitmap::CreateCopyFromBuffer(&buf, BitmapPixelFormat::Bgra8, src.w, src.h)?
+    };
+    let (engine, english) = engines()?;
+    let res = engine.RecognizeAsync(&bmp)?.join()?;
+    if let Some(en) = english {
+        if !looks_native(&res) {
+            return Ok((en.RecognizeAsync(&bmp)?.join()?, f));
+        }
     }
-    let scaled;
-    let src = if f > 1 {
-        scaled = img.upscale(f);
-        &scaled
-    } else {
-        img
-    };
-    let (w, h) = (src.w.min(max), src.h.min(max));
-    let cropped;
-    let src = if w != src.w || h != src.h {
-        cropped = src.crop(0, 0, w, h);
-        &cropped
-    } else {
-        src
-    };
-    let buf = CryptographicBuffer::CreateFromByteArray(src.as_bytes())?;
-    let bmp = SoftwareBitmap::CreateCopyFromBuffer(&buf, BitmapPixelFormat::Bgra8, src.w, src.h)?;
-    Ok((engine.RecognizeAsync(&bmp)?.join()?, f))
+    Ok((res, f))
 }
 
 pub fn recognize(img: &Img) -> Result<String> {

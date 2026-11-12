@@ -324,6 +324,7 @@ ini.video_format = mp4 veya gif (kayıt bitince MP4'ten yapılır)
 ini.gif = GIF'in saniyedeki kare sayısı ve en büyük genişliği, piksel (0 boyutu korur)
 ini.detect = Pencerelerin içindeki öğeleri de algıla (düğmeler, paneller)
 ini.delay = Gecikmeli çekimin bekleme süresi, saniye (1 ile 60 arası)
+ini.ocr_language = Görüntüdeki yazıyı okuma dili (OCR): auto ya da tr, en-US gibi bir kod
 ini.history = Tamamlanan çekimleri %LOCALAPPDATA%\WispShot\history klasöründe tut (true veya false)
 ini.history_limit = Bu kadar görüntü ya da megabaytı aşınca en eskiler silinir
 ini.history_days = Bu kadar günden eski görüntüleri sil (0: hiç)

@@ -53,6 +53,8 @@ pub struct Config {
     pub detect_elements: bool,
     /// Seconds the delayed capture waits.
     pub capture_delay: u32,
+    /// OCR language: "auto" or a language tag such as "tr" or "en-US".
+    pub ocr_language: String,
     /// Keep finished captures in the history folder.
     pub history: bool,
     pub history_keep: u32,
@@ -127,9 +129,10 @@ fn default_ini() -> String {
     );
     s += &format!("\n[record]\n; {}\nvideo_dir =\n; {}\nsave_mode = folder\nnotify = true\nfps = 30\ncursor = true\n; {}\nink_fade = true\n; {}\nformat = mp4\n; {}\ngif_fps = 15\ngif_width = 800\n", t("ini.video_dir"), t("ini.video_mode"), t("ini.ink_fade"), t("ini.video_format"), t("ini.gif"));
     s += &format!(
-        "\n[capture]\nmagnifier = true\n; {}\ndetect_elements = false\n; {}\ndelay = 3\n",
+        "\n[capture]\nmagnifier = true\n; {}\ndetect_elements = false\n; {}\ndelay = 3\n; {}\nocr_language = auto\n",
         t("ini.detect"),
-        t("ini.delay")
+        t("ini.delay"),
+        t("ini.ocr_language")
     );
     s += &format!(
         "\n[history]\n; {}\nenabled = false\n; {}\nkeep = 100\nmax_mb = 500\n; {}\nmax_days = 0\n; {}\nocr = true\n",
@@ -226,6 +229,7 @@ pub fn save(cfg: &Config) -> std::io::Result<()> {
         ("capture", "magnifier", tf(cfg.magnifier)),
         ("capture", "detect_elements", tf(cfg.detect_elements)),
         ("capture", "delay", cfg.capture_delay.to_string()),
+        ("capture", "ocr_language", cfg.ocr_language.clone()),
         ("history", "enabled", tf(cfg.history)),
         ("history", "keep", cfg.history_keep.to_string()),
         ("history", "max_mb", cfg.history_mb.to_string()),
@@ -417,6 +421,7 @@ pub fn load() -> Config {
         magnifier: b("capture.magnifier", true),
         detect_elements: b("capture.detect_elements", false),
         capture_delay: get("capture.delay", "3").parse::<u32>().unwrap_or(3).clamp(1, 60),
+        ocr_language: get("capture.ocr_language", "auto"),
         history: b("history.enabled", false),
         history_keep: get("history.keep", "100").parse::<u32>().unwrap_or(100).max(1),
         history_mb: get("history.max_mb", "500").parse::<u32>().unwrap_or(500).max(1),
@@ -430,6 +435,7 @@ pub fn load() -> Config {
     };
     crate::i18n::set(&cfg.language);
     crate::output::set_jpeg_quality(cfg.jpeg_quality);
+    crate::ocr::set_language(&cfg.ocr_language);
     FRAME_ON.store(cfg.frame != crate::frame::Style::Off, Ordering::Relaxed);
     THEME.store(cfg.theme as u8, Ordering::Relaxed);
     keys::activate(&cfg.keys);

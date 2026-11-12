@@ -56,10 +56,13 @@ features = [
   "Win32_UI_WindowsAndMessaging",
   "Foundation",
   "Foundation_Collections",
+  "Globalization",
   "Graphics_Imaging",
   "Media_Ocr",
   "Security_Cryptography",
   "Storage_Streams",
+  "System",
+  "System_UserProfile",
 ]
 
 [profile.release]

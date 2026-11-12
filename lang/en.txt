@@ -325,6 +325,7 @@ ini.video_format = mp4 or gif (made from the MP4 when recording ends)
 ini.gif = GIF frames per second and largest width in pixels (0 keeps the size)
 ini.detect = Also detect elements inside windows (buttons, panels)
 ini.delay = Seconds the delayed screenshot waits (1 to 60)
+ini.ocr_language = Language for reading text in images (OCR): auto, or a code such as tr or en-US
 ini.history = Keep finished captures in %LOCALAPPDATA%\WispShot\history (true or false)
 ini.history_limit = The oldest are deleted past this many images or megabytes
 ini.history_days = Delete images older than this many days (0: never)

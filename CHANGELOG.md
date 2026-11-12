@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Text recognition (OCR) reads Turkish and other languages with extra letters much better. It used to read with
+  only the first language in your Windows list, so Turkish text on an English Windows came out garbled. Now it
+  reads with your other Latin-script language first and switches to English when the text turns out to be
+  English. Small screen text is enlarged smoothly before reading, which helps most at 8 pt and below. To pick one
+  language yourself, set `[capture] ocr_language` (for example `tr` or `en-US`).
+
 ## [0.4.0] - 2026-11-12
 
 ### Added

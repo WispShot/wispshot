@@ -86,6 +86,26 @@ fn engines() -> Result<(OcrEngine, Option<OcrEngine>)> {
     Ok((native, english.and_then(|l| engine_for(&l))))
 }
 
+/// The user's main non-English Latin-script language, by its own name ("Türkçe"), when
+/// Windows has no OCR pack for it: text in it is then read with the wrong letters.
+pub fn missing_language() -> Option<String> {
+    let want = LANGUAGE.read().map(|l| l.clone()).unwrap_or_default();
+    if !want.is_empty() && !want.eq_ignore_ascii_case("auto") {
+        return None;
+    }
+    for tag in GlobalizationPreferences::Languages().ok()? {
+        let Ok(lang) = Language::CreateLanguage(&tag) else { continue };
+        if is_english(&tag.to_string_lossy()) || !lang.Script().map(|s| s == "Latn").unwrap_or(false) {
+            continue;
+        }
+        if OcrEngine::IsLanguageSupported(&lang).unwrap_or(false) {
+            return None;
+        }
+        return lang.NativeName().ok().map(|n| n.to_string_lossy());
+    }
+    None
+}
+
 /// Whether enough of the words have letters beyond ASCII (see NATIVE_SHARE).
 fn looks_native(res: &OcrResult) -> bool {
     let (mut words, mut native) = (0, 0);

@@ -87,6 +87,8 @@ pin.close = Close
 ocr.title = WispShot OCR: the text is on your clipboard (Esc closes)
 ocr.unavailable = Text recognition isn't available
 ocr.need_language = Windows needs an OCR language pack for this (Settings > Time & language > Language). {0}
+ocr.hint_title = {0} text recognition is missing
+ocr.hint_body = Windows reads {0} letters wrong without it. Click here, open {0} > Language options and download Optical character recognition.
 ocr.no_text = No text found.
 
 # ---- notifications and errors

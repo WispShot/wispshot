@@ -86,6 +86,8 @@ pin.close = Kapat
 ocr.title = WispShot OCR: metin panoya kopyalandı (Esc ile kapanır)
 ocr.unavailable = Metin tanıma kullanılamıyor
 ocr.need_language = Bunun için Windows'ta bir OCR dil paketi gerekiyor (Ayarlar > Saat ve dil > Dil). {0}
+ocr.hint_title = {0} metin tanıma paketi eksik
+ocr.hint_body = Bu paket olmadan Windows {0} harfleri yanlış okur. Buraya tıklayın, {0} > Dil seçenekleri'ni açıp Optik karakter tanıma'yı indirin.
 ocr.no_text = Metin bulunamadı.
 
 # ---- bildirimler ve hatalar

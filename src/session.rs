@@ -608,6 +608,9 @@ unsafe extern "system" fn proc_(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) ->
             } else {
                 output::copy_text(hwnd, &text);
                 ocr::show_result(&text, rect);
+                if let Some(lang) = ocr::missing_language() {
+                    crate::ipc_send(crate::IPC_OCR_HINT, &lang);
+                }
             }
             maybe_exit();
             LRESULT(0)

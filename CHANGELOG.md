@@ -21,6 +21,8 @@
   reads with your other Latin-script language first and switches to English when the text turns out to be
   English. Small screen text is enlarged smoothly before reading, which helps most at 8 pt and below. To pick one
   language yourself, set `[capture] ocr_language` (for example `tr` or `en-US`).
+  When Windows has no text recognition pack for your language, a notice says so once; clicking it opens the
+  language settings where you can download it.
 
 ## [0.4.0] - 2026-11-12
 

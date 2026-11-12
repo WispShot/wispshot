@@ -146,6 +146,10 @@ pub const IPC_LAST_FILE: usize = 4;
 pub const IPC_RELOAD: usize = 5;
 /// settings window is reading keys for a hotkey field: "0" release ours, "1" take them back
 pub const IPC_HOTKEYS: usize = 6;
+/// A session read text in a language Windows has no OCR pack for (its name follows).
+pub const IPC_OCR_HINT: usize = 7;
+/// The OCR language hint was shown since the tray started (once is enough).
+static OCR_HINTED: AtomicBool = AtomicBool::new(false);
 
 struct State {
     cfg: Config,
@@ -988,7 +992,7 @@ unsafe extern "system" fn app_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                 NIN_BALLOONUSERCLICK => {
                     if let Some(Some(p)) = with(|s| s.last_file.clone()) {
                         let s = p.to_string_lossy();
-                        if s.starts_with("https://") || s.starts_with("http://") {
+                        if s.starts_with("https://") || s.starts_with("http://") || s.starts_with("ms-settings:") {
                             // an uploaded capture: open its link
                             let u = output::wide(&s);
                             ShellExecuteW(None, w!("open"), PCWSTR(u.as_ptr()), None, None, SW_SHOWNORMAL);
@@ -1043,6 +1047,11 @@ unsafe extern "system" fn app_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                 IPC_NOTIFY => {
                     let (t, b) = s.split_once('\u{1}').unwrap_or(("WispShot", s.as_str()));
                     notify(t, b);
+                }
+                IPC_OCR_HINT if !OCR_HINTED.swap(true, Ordering::Relaxed) => {
+                    // a click on the notice opens the language settings
+                    with(|st| st.last_file = Some(PathBuf::from("ms-settings:regionlanguage")));
+                    notify(&tf("ocr.hint_title", &[&s]), &tf("ocr.hint_body", &[&s]));
                 }
                 IPC_REC_ON | IPC_REC_OFF => {
                     with(|st| st.recording = cds.dwData == IPC_REC_ON);

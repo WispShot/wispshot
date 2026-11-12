@@ -82,6 +82,85 @@ enum Btn {
     Copy,
     Close,
     Color(usize),
+    /// Opens the tools that are not on the bar (shows the current one when it is one of them).
+    MoreTools,
+    /// Opens the actions that are not on the bar.
+    MoreActions,
+    /// The current colour; opens the palette.
+    ColorDot,
+    /// Empty space inside an open panel (a click there does nothing).
+    Panel,
+}
+
+/// A small panel opened from the toolbar.
+#[derive(Clone, Copy, PartialEq)]
+enum Pop {
+    Tools,
+    Actions,
+    Colors,
+}
+
+const ALL_TOOLS: [Tool; 11] = [
+    Tool::Rect,
+    Tool::Ellipse,
+    Tool::Arrow,
+    Tool::Line,
+    Tool::Measure,
+    Tool::Pen,
+    Tool::Marker,
+    Tool::Text,
+    Tool::Counter,
+    Tool::Mosaic,
+    Tool::Blur,
+];
+const ALL_ACTIONS: [Btn; 8] =
+    [Btn::Redact, Btn::Pin, Btn::Ocr, Btn::Record, Btn::Scroll, Btn::Upload, Btn::Save, Btn::CopyFile];
+
+/// The tools and actions the settings put on the bar.
+fn bar_lists() -> (Vec<Tool>, Vec<Btn>) {
+    let (tools, acts) = crate::config::bar();
+    let pick = |names: &[String], all: &[(&str, &str)], i: usize| names.iter().any(|n| n == all[i].0);
+    let t =
+        (0..ALL_TOOLS.len()).filter(|&i| pick(&tools, &crate::config::BAR_TOOLS, i)).map(|i| ALL_TOOLS[i]).collect();
+    let a = (0..ALL_ACTIONS.len())
+        .filter(|&i| pick(&acts, &crate::config::BAR_ACTIONS, i))
+        .map(|i| ALL_ACTIONS[i])
+        .collect();
+    (t, a)
+}
+
+/// Name and shortcut of an action, for the rows of the "more" panel.
+fn action_row(b: Btn) -> (&'static str, K) {
+    match b {
+        Btn::Redact => (t("editor.redact"), K::Redact),
+        Btn::Pin => (t("editor.pin"), K::PinIt),
+        Btn::Ocr => (t("editor.ocr"), K::Ocr),
+        Btn::Record => (t("editor.record"), K::RecordArea),
+        Btn::Scroll => (t("editor.scroll"), K::ScrollCapture),
+        Btn::Upload => (t("editor.upload"), K::Upload),
+        Btn::Save => (t("editor.save"), K::Save),
+        _ => (t("editor.copy_file"), K::CopyFile),
+    }
+}
+
+/// Toolbar colours for the theme: (panel, border, hover, text, disabled, accent, on accent).
+fn bar_colors(light: bool) -> (u32, u32, u32, u32, u32, u32, u32) {
+    let a = crate::traymenu::accent();
+    if light {
+        (0xF8FA_FAFB, 0x24000000, 0x12000000, 0xFF1E_1E1E, 0xFFAA_AAAA, 0xFF00_0000 | a, 0xFFFF_FFFF)
+    } else {
+        // dark mode uses a lighter shade of the accent, like Windows and the settings window
+        let l = |c: u32, sh: u32| ((((c >> sh) & 0xFF) as f32 * 0.45 + 255.0 * 0.55) as u32) << sh;
+        (
+            0xF52B_2D33,
+            0x24FF_FFFF,
+            0x1CFF_FFFF,
+            0xFFF0_F0F0,
+            0xFF70_7070,
+            0xFF00_0000 | l(a, 16) | l(a, 8) | l(a, 0),
+            0xFF00_0000,
+        )
+    }
 }
 
 impl Btn {
@@ -120,7 +199,10 @@ impl Btn {
             Btn::CopyFile => k(t("editor.copy_file"), K::CopyFile),
             Btn::Copy => tf("editor.copy_tip", &[&keys::label(K::Copy)]),
             Btn::Close => format!("{}  (Esc)", t("editor.close")),
-            Btn::Color(_) => t("editor.color_tip").to_string(),
+            Btn::Color(_) | Btn::ColorDot => t("editor.color_tip").to_string(),
+            Btn::MoreTools => t("editor.more_tools").to_string(),
+            Btn::MoreActions => t("editor.more").to_string(),
+            Btn::Panel => String::new(),
         }
     }
 }
@@ -218,6 +300,10 @@ struct Ov {
     cur: Option<Item>,
     text: Option<TextEdit>,
     tb_hover: Option<Btn>,
+    /// The panel open under (or over) the toolbar.
+    pop: Option<Pop>,
+    /// Light theme (from the settings or Windows).
+    light: bool,
     scale: f32,
     fmt_ui: Option<IDWriteTextFormat>,
     fmt_icon: Option<IDWriteTextFormat>,
@@ -337,6 +423,8 @@ pub fn open(mode: Mode, magnifier: bool, deep: bool, veil: Option<HWND>) -> bool
             cur: None,
             text: None,
             tb_hover: None,
+            pop: None,
+            light: crate::traymenu::light_theme(false),
             scale,
             fmt_ui: None,
             fmt_icon: None,
@@ -577,6 +665,19 @@ impl Ov {
         }
     }
 
+    fn show_colors(&self) -> bool {
+        !matches!(self.tool, Tool::None | Tool::Mosaic | Tool::Blur)
+    }
+
+    /// Width of the Copy button: a check mark and the word.
+    fn copy_w(&self) -> f32 {
+        let s = self.scale;
+        let tw = self.fmt_ui.as_ref().map(|f| self.g.measure(t("editor.copy_short"), f).0).unwrap_or(40.0 * s);
+        tw + 44.0 * s
+    }
+
+    /// One row: the chosen tools, "more tools", colour, undo/redo, the chosen actions,
+    /// "more", Close and Copy. Under the selection, or over it when there is no room.
     fn toolbar(&self) -> Vec<(D2D_RECT_F, Btn)> {
         let Some(sel) = self.sel else { return vec![] };
         if !matches!(self.drag, Drag::None | Drag::Drawing { .. }) {
@@ -585,81 +686,133 @@ impl Ov {
         let s = self.scale;
         let bs = 32.0 * s;
         let gap = 6.0 * s;
-        let mut row: Vec<Option<Btn>> = vec![];
-        for t in [
-            Tool::Rect,
-            Tool::Ellipse,
-            Tool::Arrow,
-            Tool::Line,
-            Tool::Measure,
-            Tool::Pen,
-            Tool::Marker,
-            Tool::Text,
-            Tool::Counter,
-            Tool::Mosaic,
-            Tool::Blur,
-        ] {
-            row.push(Some(Btn::Tool(t)));
-        }
-        row.extend([
-            None,
-            Some(Btn::Undo),
-            Some(Btn::Redo),
-            None,
-            Some(Btn::Redact),
-            Some(Btn::Pin),
-            Some(Btn::Ocr),
-            Some(Btn::Record),
-            Some(Btn::Scroll),
-            Some(Btn::Upload),
-            Some(Btn::Save),
-            Some(Btn::CopyFile),
-            None,
-            Some(Btn::Close),
-            Some(Btn::Copy),
-        ]);
         let sep = 9.0 * s;
-        let width: f32 = row.iter().map(|b| if b.is_some() { bs } else { sep }).sum();
-        let show_colors = !matches!(self.tool, Tool::None | Tool::Mosaic | Tool::Blur);
-        let rows_h = if show_colors { bs * 2.0 + gap * 0.5 } else { bs };
+        let (tools, acts) = bar_lists();
+        let mut row: Vec<Option<(Btn, f32)>> = vec![];
+        row.extend(tools.iter().map(|t| Some((Btn::Tool(*t), bs))));
+        if tools.len() < ALL_TOOLS.len() {
+            row.push(Some((Btn::MoreTools, bs)));
+        }
+        row.push(None);
+        if self.show_colors() {
+            row.push(Some((Btn::ColorDot, bs)));
+        }
+        row.extend([Some((Btn::Undo, bs)), Some((Btn::Redo, bs)), None]);
+        row.extend(acts.iter().map(|a| Some((*a, bs))));
+        if acts.len() < ALL_ACTIONS.len() {
+            row.push(Some((Btn::MoreActions, bs)));
+        }
+        if !acts.is_empty() || acts.len() < ALL_ACTIONS.len() {
+            row.push(None);
+        }
+        row.extend([Some((Btn::Close, bs)), Some((Btn::Copy, self.copy_w()))]);
+        let width: f32 = row.iter().map(|b| b.map(|(_, w)| w).unwrap_or(sep)).sum();
         let mon = self.monitor_rect(sel.right - 1, sel.bottom - 1);
         let mut y = sel.bottom as f32 + gap;
-        if y + rows_h > mon.bottom as f32 {
-            y = sel.top as f32 - gap - rows_h;
+        if y + bs > mon.bottom as f32 {
+            y = sel.top as f32 - gap - bs;
             if y < mon.top as f32 {
-                y = sel.bottom as f32 - gap - rows_h;
+                y = sel.bottom as f32 - gap - bs;
             }
         }
         let mut x = (sel.right as f32 - width).max(mon.left as f32 + gap);
         x = x.min(mon.right as f32 - width - gap);
         let mut out = vec![];
-        let x0 = x;
         for b in row {
             match b {
-                Some(b) => {
-                    out.push((rc(x, y, x + bs, y + bs), b));
-                    x += bs;
+                Some((b, w)) => {
+                    out.push((rc(x, y, x + w, y + bs), b));
+                    x += w;
                 }
                 None => x += sep,
-            }
-        }
-        if show_colors {
-            let y2 = y + bs + gap * 0.5;
-            let mut cx = x0;
-            for i in 0..PALETTE.len() {
-                out.push((rc(cx, y2, cx + bs, y2 + bs), Btn::Color(i)));
-                cx += bs;
             }
         }
         out
     }
 
+    /// The open panel: its box and its items, next to the button that opened it.
+    fn popup(&self, bar: &[(D2D_RECT_F, Btn)]) -> Option<(D2D_RECT_F, Vec<(D2D_RECT_F, Btn)>)> {
+        let pop = self.pop?;
+        let anchor = match pop {
+            Pop::Tools => Btn::MoreTools,
+            Pop::Actions => Btn::MoreActions,
+            Pop::Colors => Btn::ColorDot,
+        };
+        let ar = bar.iter().find(|(_, b)| *b == anchor)?.0;
+        let s = self.scale;
+        let (pad, bs) = (4.0 * s, 32.0 * s);
+        let (tools, acts) = bar_lists();
+        // item boxes relative to the panel's top-left corner
+        let mut items: Vec<(D2D_RECT_F, Btn)> = vec![];
+        let (w, h) = match pop {
+            Pop::Tools => {
+                let hidden: Vec<Tool> = ALL_TOOLS.iter().copied().filter(|t| !tools.contains(t)).collect();
+                for (i, t) in hidden.iter().enumerate() {
+                    let x = pad + bs * i as f32;
+                    items.push((rc(x, pad, x + bs, pad + bs), Btn::Tool(*t)));
+                }
+                (pad * 2.0 + bs * hidden.len() as f32, pad * 2.0 + bs)
+            }
+            Pop::Colors => {
+                for i in 0..PALETTE.len() {
+                    let x = pad + bs * i as f32;
+                    items.push((rc(x, pad, x + bs, pad + bs), Btn::Color(i)));
+                }
+                let readout = self.fmt_ui.as_ref().map(|f| self.g.measure(&self.size_readout(), f).0).unwrap_or(0.0);
+                (pad * 2.0 + bs * PALETTE.len() as f32 + readout + 14.0 * s, pad * 2.0 + bs)
+            }
+            Pop::Actions => {
+                let hidden: Vec<Btn> = ALL_ACTIONS.iter().copied().filter(|a| !acts.contains(a)).collect();
+                let rh = 30.0 * s;
+                let f = self.fmt_ui.as_ref()?;
+                let wide = hidden
+                    .iter()
+                    .map(|b| {
+                        let (name, k) = action_row(*b);
+                        self.g.measure(name, f).0 + self.g.measure(&keys::label(k), f).0
+                    })
+                    .fold(0.0, f32::max);
+                let w = pad * 2.0 + rh + wide + 40.0 * s;
+                for (i, b) in hidden.iter().enumerate() {
+                    let y = pad + rh * i as f32;
+                    items.push((rc(pad, y, w - pad, y + rh), *b));
+                }
+                (w, pad * 2.0 + rh * hidden.len() as f32)
+            }
+        };
+        // under the bar if it fits on the monitor, else over it; kept on the monitor sideways
+        let mon = self.monitor_rect(ar.left as i32, ar.top as i32);
+        let mut y = ar.bottom + 3.0 * s + 6.0 * s;
+        if y + h > mon.bottom as f32 {
+            y = ar.top - 3.0 * s - 6.0 * s - h;
+        }
+        let x = (ar.left - pad).min(mon.right as f32 - w - 4.0 * s).max(mon.left as f32 + 4.0 * s);
+        let moved = items.into_iter().map(|(r, b)| (rc(r.left + x, r.top + y, r.right + x, r.bottom + y), b)).collect();
+        Some((rc(x, y, x + w, y + h), moved))
+    }
+
+    /// "Width: 14" (or the font size for text).
+    fn size_readout(&self) -> String {
+        format!(
+            "{}: {:.0}",
+            if self.tool == Tool::Text { t("editor.font_size") } else { t("editor.width") },
+            self.size()
+        )
+    }
+
     fn hit_toolbar(&self, x: i32, y: i32) -> Option<Btn> {
         let (x, y) = (x as f32, y as f32);
-        self.toolbar()
-            .into_iter()
-            .find(|(r, _)| x >= r.left && x < r.right && y >= r.top && y < r.bottom)
-            .map(|(_, b)| b)
+        let inside = |r: &D2D_RECT_F| x >= r.left && x < r.right && y >= r.top && y < r.bottom;
+        let bar = self.toolbar();
+        if let Some((panel, items)) = self.popup(&bar) {
+            if let Some((_, b)) = items.iter().find(|(r, _)| inside(r)) {
+                return Some(*b);
+            }
+            if inside(&panel) {
+                return Some(Btn::Panel);
+            }
+        }
+        bar.into_iter().find(|(r, _)| inside(r)).map(|(_, b)| b)
     }
 
     fn hit_edges(&self, x: i32, y: i32) -> u8 {
@@ -966,257 +1119,320 @@ impl Ov {
         Ok(())
     }
 
-    fn draw_toolbar(&self, rt: &ID2D1RenderTarget) -> Result<()> {
-        let tb = self.toolbar();
-        if tb.is_empty() {
-            return Ok(());
-        }
+    /// The picture of a button inside `r` (all but Copy, which is drawn with its label).
+    #[allow(clippy::too_many_arguments)]
+    fn glyph(
+        &self,
+        rt: &ID2D1RenderTarget,
+        b: Btn,
+        r: &D2D_RECT_F,
+        fg: &ID2D1SolidColorBrush,
+        fgc: u32,
+        dis: &ID2D1SolidColorBrush,
+    ) -> Result<()> {
         let s = self.scale;
         unsafe {
-            let bg = brush(rt, 0xF22A_2A2E)?;
-            let hov = brush(rt, 0xFF44_4450)?;
-            let act = brush(rt, ACCENT)?;
-            let fg = brush(rt, 0xFFF0_F0F0)?;
-            let dis = brush(rt, 0xFF70_7070)?;
-            // backgrounds per row
-            let main_top = tb[0].0.top;
-            let mut rows: Vec<D2D_RECT_F> = vec![];
-            for (r, _) in &tb {
-                if let Some(rr) = rows.iter_mut().find(|rr| rr.top == r.top) {
-                    rr.left = rr.left.min(r.left);
-                    rr.right = rr.right.max(r.right);
-                } else {
-                    rows.push(*r);
-                }
-            }
-            for r in rows {
-                let pad = 3.0 * s;
-                let rr = D2D1_ROUNDED_RECT {
-                    rect: rc(r.left - pad, r.top - pad, r.right + pad, r.bottom + pad),
-                    radiusX: 6.0 * s,
-                    radiusY: 6.0 * s,
-                };
-                rt.FillRoundedRectangle(&rr, &bg);
-            }
             let icon = |ch: &str, r: &D2D_RECT_F, b: &ID2D1SolidColorBrush| {
                 if let Some(f) = &self.fmt_icon {
                     let w: Vec<u16> = ch.encode_utf16().collect();
                     rt.DrawText(&w, f, r, b, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
                 }
             };
-            for (r, b) in &tb {
-                let inner = rc(r.left + 2.0 * s, r.top + 2.0 * s, r.right - 2.0 * s, r.bottom - 2.0 * s);
-                let active = matches!(b, Btn::Tool(t) if *t == self.tool);
-                if active {
-                    rt.FillRoundedRectangle(
-                        &D2D1_ROUNDED_RECT { rect: inner, radiusX: 4.0 * s, radiusY: 4.0 * s },
-                        &act,
-                    );
-                } else if self.tb_hover == Some(*b) {
-                    rt.FillRoundedRectangle(
-                        &D2D1_ROUNDED_RECT { rect: inner, radiusX: 4.0 * s, radiusY: 4.0 * s },
-                        &hov,
-                    );
+            let (cx, cy) = ((r.left + r.right) / 2.0, (r.top + r.bottom) / 2.0);
+            let u = 5.5 * s;
+            match b {
+                Btn::Tool(Tool::Rect) => icon("\u{E739}", r, fg),
+                Btn::Tool(Tool::Ellipse) => icon("\u{EA3A}", r, fg),
+                Btn::Tool(Tool::Arrow) => {
+                    let it = Item::Arrow {
+                        a: (cx - u * 1.3, cy + u * 1.3),
+                        b: (cx + u * 1.3, cy - u * 1.3),
+                        c: fgc,
+                        w: 1.6 * s,
+                    };
+                    draw_item(&self.g, rt, &it, false)?;
                 }
-                let (cx, cy) = ((r.left + r.right) / 2.0, (r.top + r.bottom) / 2.0);
-                let u = 5.5 * s;
-                match b {
-                    Btn::Tool(Tool::Rect) => icon("\u{E739}", r, &fg),
-                    Btn::Tool(Tool::Ellipse) => icon("\u{EA3A}", r, &fg),
-                    Btn::Tool(Tool::Arrow) => {
-                        let it = Item::Arrow {
-                            a: (cx - u * 1.3, cy + u * 1.3),
-                            b: (cx + u * 1.3, cy - u * 1.3),
-                            c: 0xFFF0_F0F0,
-                            w: 1.6 * s,
-                        };
-                        draw_item(&self.g, rt, &it, false)?;
+                Btn::Tool(Tool::Line) => rt.DrawLine(
+                    pt(cx - u * 1.3, cy + u * 1.3),
+                    pt(cx + u * 1.3, cy - u * 1.3),
+                    fg,
+                    1.6 * s,
+                    &self.g.round,
+                ),
+                Btn::Tool(Tool::Measure) => {
+                    // a ruler: a bar with ticks
+                    let (l, rr) = (cx - u * 1.6, cx + u * 1.6);
+                    rt.DrawRectangle(&rc(l, cy - u * 0.6, rr, cy + u * 0.6), fg, 1.1 * s, None);
+                    for i in 1..4 {
+                        let x = l + (rr - l) * i as f32 / 4.0;
+                        rt.DrawLine(
+                            pt(x, cy - u * 0.6),
+                            pt(x, cy - if i == 2 { 0.0 } else { u * 0.2 }),
+                            fg,
+                            1.0 * s,
+                            None,
+                        );
                     }
-                    Btn::Tool(Tool::Line) => rt.DrawLine(
-                        pt(cx - u * 1.3, cy + u * 1.3),
-                        pt(cx + u * 1.3, cy - u * 1.3),
-                        &fg,
-                        1.6 * s,
-                        &self.g.round,
-                    ),
-                    Btn::Tool(Tool::Measure) => {
-                        // a ruler: a bar with ticks
-                        let (l, rr) = (cx - u * 1.6, cx + u * 1.6);
-                        rt.DrawRectangle(&rc(l, cy - u * 0.6, rr, cy + u * 0.6), &fg, 1.1 * s, None);
-                        for i in 1..4 {
-                            let x = l + (rr - l) * i as f32 / 4.0;
-                            rt.DrawLine(
-                                pt(x, cy - u * 0.6),
-                                pt(x, cy - if i == 2 { 0.0 } else { u * 0.2 }),
-                                &fg,
-                                1.0 * s,
-                                None,
-                            );
-                        }
+                }
+                Btn::Tool(Tool::Pen) => icon("\u{E70F}", r, fg),
+                Btn::Tool(Tool::Marker) => icon("\u{E7E6}", r, fg),
+                Btn::Tool(Tool::Text) => icon("\u{E8D2}", r, fg),
+                Btn::Tool(Tool::Counter) => {
+                    let e = D2D1_ELLIPSE { point: pt(cx, cy), radiusX: u * 1.45, radiusY: u * 1.45 };
+                    rt.DrawEllipse(&e, fg, 1.3 * s, None);
+                    if let Ok(f) = self.g.text_format(11.0 * s, true) {
+                        let _ = f.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+                        let _ = f.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+                        rt.DrawText(
+                            &[b'1' as u16],
+                            &f,
+                            r,
+                            fg,
+                            D2D1_DRAW_TEXT_OPTIONS_NONE,
+                            DWRITE_MEASURING_MODE_NATURAL,
+                        );
                     }
-                    Btn::Tool(Tool::Pen) => icon("\u{E70F}", r, &fg),
-                    Btn::Tool(Tool::Marker) => icon("\u{E7E6}", r, &fg),
-                    Btn::Tool(Tool::Text) => icon("\u{E8D2}", r, &fg),
-                    Btn::Tool(Tool::Counter) => {
-                        let e = D2D1_ELLIPSE { point: pt(cx, cy), radiusX: u * 1.45, radiusY: u * 1.45 };
-                        rt.DrawEllipse(&e, &fg, 1.3 * s, None);
-                        if let Ok(f) = self.g.text_format(11.0 * s, true) {
-                            let _ = f.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-                            let _ = f.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-                            rt.DrawText(
-                                &[b'1' as u16],
-                                &f,
-                                r,
-                                &fg,
-                                D2D1_DRAW_TEXT_OPTIONS_NONE,
-                                DWRITE_MEASURING_MODE_NATURAL,
-                            );
-                        }
-                    }
-                    Btn::Tool(Tool::Mosaic) => {
-                        let c = u * 0.85;
-                        for i in 0..3 {
-                            for j in 0..3 {
-                                let x = cx - c * 1.5 + c * i as f32;
-                                let y = cy - c * 1.5 + c * j as f32;
-                                let rr = rc(x, y, x + c, y + c);
-                                if (i + j) % 2 == 0 {
-                                    rt.FillRectangle(&rr, &fg);
-                                } else {
-                                    rt.DrawRectangle(&rr, &fg, 0.8 * s, None);
-                                }
+                }
+                Btn::Tool(Tool::Mosaic) => {
+                    let c = u * 0.85;
+                    for i in 0..3 {
+                        for j in 0..3 {
+                            let x = cx - c * 1.5 + c * i as f32;
+                            let y = cy - c * 1.5 + c * j as f32;
+                            let rr = rc(x, y, x + c, y + c);
+                            if (i + j) % 2 == 0 {
+                                rt.FillRectangle(&rr, fg);
+                            } else {
+                                rt.DrawRectangle(&rr, fg, 0.8 * s, None);
                             }
                         }
                     }
-                    Btn::Tool(Tool::Blur) => {
-                        for (k, a) in [(1.6f32, 0x40u32), (1.25, 0x80), (0.9, 0xC0), (0.55, 0xFF)] {
-                            let bb = brush(rt, (a << 24) | 0xF0F0F0)?;
-                            let e = D2D1_ELLIPSE { point: pt(cx, cy), radiusX: u * k, radiusY: u * k };
-                            rt.FillEllipse(&e, &bb);
-                        }
-                    }
-                    Btn::Tool(Tool::None) => {}
-                    Btn::Undo => icon("\u{E7A7}", r, if self.undo.is_empty() { &dis } else { &fg }),
-                    Btn::Redo => icon("\u{E7A6}", r, if self.redo.is_empty() { &dis } else { &fg }),
-                    Btn::Pin => icon("\u{E718}", r, &fg),
-                    Btn::Redact => icon("\u{EA18}", r, &fg),
-                    Btn::Upload => icon("\u{E898}", r, &fg),
-                    Btn::Ocr => {
-                        if let Ok(f) = self.g.text_format(9.5 * s, true) {
-                            let _ = f.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-                            let _ = f.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-                            let w: Vec<u16> = "OCR".encode_utf16().collect();
-                            rt.DrawText(&w, &f, r, &fg, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
-                        }
-                        rt.DrawRoundedRectangle(
-                            &D2D1_ROUNDED_RECT {
-                                rect: rc(cx - u * 1.6, cy - u * 1.1, cx + u * 1.6, cy + u * 1.1),
-                                radiusX: 2.0 * s,
-                                radiusY: 2.0 * s,
-                            },
-                            &fg,
-                            1.0 * s,
-                            None,
-                        );
-                    }
-                    Btn::Record => {
-                        let red = brush(rt, 0xFFFF_4040)?;
-                        rt.FillEllipse(&D2D1_ELLIPSE { point: pt(cx, cy), radiusX: u * 1.1, radiusY: u * 1.1 }, &red);
-                        rt.DrawEllipse(
-                            &D2D1_ELLIPSE { point: pt(cx, cy), radiusX: u * 1.6, radiusY: u * 1.6 },
-                            &fg,
-                            1.2 * s,
-                            None,
-                        );
-                    }
-                    Btn::Scroll => {
-                        // a tall page with an arrow down its middle
-                        rt.DrawRoundedRectangle(
-                            &D2D1_ROUNDED_RECT {
-                                rect: rc(cx - u * 1.1, cy - u * 1.7, cx + u * 1.1, cy + u * 1.7),
-                                radiusX: 2.0 * s,
-                                radiusY: 2.0 * s,
-                            },
-                            &fg,
-                            1.0 * s,
-                            None,
-                        );
-                        let a = (cx, cy - u * 0.9);
-                        let b = (cx, cy + u * 0.9);
-                        rt.DrawLine(pt(a.0, a.1), pt(b.0, b.1), &fg, 1.2 * s, None);
-                        rt.DrawLine(pt(b.0 - u * 0.5, b.1 - u * 0.5), pt(b.0, b.1), &fg, 1.2 * s, None);
-                        rt.DrawLine(pt(b.0 + u * 0.5, b.1 - u * 0.5), pt(b.0, b.1), &fg, 1.2 * s, None);
-                    }
-                    Btn::Save => icon("\u{E74E}", r, &fg),
-                    Btn::CopyFile => icon("\u{E8A5}", r, &fg),
-                    Btn::Copy => {
-                        let green = brush(rt, 0xFF4C_D964)?;
-                        icon("\u{E73E}", r, &green)
-                    }
-                    Btn::Close => icon("\u{E711}", r, &fg),
-                    Btn::Color(i) => {
-                        let cb = brush(rt, PALETTE[*i])?;
-                        let rr = rc(cx - u * 1.2, cy - u * 1.2, cx + u * 1.2, cy + u * 1.2);
-                        rt.FillRoundedRectangle(
-                            &D2D1_ROUNDED_RECT { rect: rr, radiusX: 3.0 * s, radiusY: 3.0 * s },
-                            &cb,
-                        );
-                        if *i == self.color {
-                            rt.DrawRoundedRectangle(
-                                &D2D1_ROUNDED_RECT {
-                                    rect: rc(
-                                        rr.left - 3.0 * s,
-                                        rr.top - 3.0 * s,
-                                        rr.right + 3.0 * s,
-                                        rr.bottom + 3.0 * s,
-                                    ),
-                                    radiusX: 4.0 * s,
-                                    radiusY: 4.0 * s,
-                                },
-                                &fg,
-                                1.5 * s,
-                                None,
-                            );
-                        } else if PALETTE[*i] == 0xFF21_2121 {
-                            rt.DrawRoundedRectangle(
-                                &D2D1_ROUNDED_RECT { rect: rr, radiusX: 3.0 * s, radiusY: 3.0 * s },
-                                &dis,
-                                1.0,
-                                None,
-                            );
-                        }
+                }
+                Btn::Tool(Tool::Blur) => {
+                    for (k, a) in [(1.6f32, 0x40u32), (1.25, 0x80), (0.9, 0xC0), (0.55, 0xFF)] {
+                        let bb = brush(rt, (a << 24) | 0xF0F0F0)?;
+                        let e = D2D1_ELLIPSE { point: pt(cx, cy), radiusX: u * k, radiusY: u * k };
+                        rt.FillEllipse(&e, &bb);
                     }
                 }
+                Btn::Tool(Tool::None) => {}
+                Btn::Undo => icon("\u{E7A7}", r, if self.undo.is_empty() { dis } else { fg }),
+                Btn::Redo => icon("\u{E7A6}", r, if self.redo.is_empty() { dis } else { fg }),
+                Btn::Pin => icon("\u{E718}", r, fg),
+                Btn::Redact => icon("\u{EA18}", r, fg),
+                Btn::Upload => icon("\u{E898}", r, fg),
+                Btn::Ocr => {
+                    if let Ok(f) = self.g.text_format(9.5 * s, true) {
+                        let _ = f.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+                        let _ = f.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+                        let w: Vec<u16> = "OCR".encode_utf16().collect();
+                        rt.DrawText(&w, &f, r, fg, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+                    }
+                    rt.DrawRoundedRectangle(
+                        &D2D1_ROUNDED_RECT {
+                            rect: rc(cx - u * 1.6, cy - u * 1.1, cx + u * 1.6, cy + u * 1.1),
+                            radiusX: 2.0 * s,
+                            radiusY: 2.0 * s,
+                        },
+                        fg,
+                        1.0 * s,
+                        None,
+                    );
+                }
+                Btn::Record => {
+                    let red = brush(rt, 0xFFFF_4040)?;
+                    rt.FillEllipse(&D2D1_ELLIPSE { point: pt(cx, cy), radiusX: u * 1.1, radiusY: u * 1.1 }, &red);
+                    rt.DrawEllipse(
+                        &D2D1_ELLIPSE { point: pt(cx, cy), radiusX: u * 1.6, radiusY: u * 1.6 },
+                        fg,
+                        1.2 * s,
+                        None,
+                    );
+                }
+                Btn::Scroll => {
+                    // a tall page with an arrow down its middle
+                    rt.DrawRoundedRectangle(
+                        &D2D1_ROUNDED_RECT {
+                            rect: rc(cx - u * 1.1, cy - u * 1.7, cx + u * 1.1, cy + u * 1.7),
+                            radiusX: 2.0 * s,
+                            radiusY: 2.0 * s,
+                        },
+                        fg,
+                        1.0 * s,
+                        None,
+                    );
+                    let a = (cx, cy - u * 0.9);
+                    let b = (cx, cy + u * 0.9);
+                    rt.DrawLine(pt(a.0, a.1), pt(b.0, b.1), fg, 1.2 * s, None);
+                    rt.DrawLine(pt(b.0 - u * 0.5, b.1 - u * 0.5), pt(b.0, b.1), fg, 1.2 * s, None);
+                    rt.DrawLine(pt(b.0 + u * 0.5, b.1 - u * 0.5), pt(b.0, b.1), fg, 1.2 * s, None);
+                }
+                Btn::Save => icon("\u{E74E}", r, fg),
+                Btn::CopyFile => icon("\u{E8A5}", r, fg),
+                Btn::Close => icon("\u{E711}", r, fg),
+                Btn::MoreActions => icon("\u{E712}", r, fg),
+                Btn::MoreTools => {
+                    if !matches!(self.tool, Tool::None) && !bar_lists().0.contains(&self.tool) {
+                        self.glyph(rt, Btn::Tool(self.tool), r, fg, fgc, dis)?;
+                    } else {
+                        icon("\u{E712}", r, fg);
+                    }
+                }
+                Btn::ColorDot => {
+                    let cb = brush(rt, PALETTE[self.color])?;
+                    let e = D2D1_ELLIPSE { point: pt(cx, cy), radiusX: u * 1.25, radiusY: u * 1.25 };
+                    rt.FillEllipse(&e, &cb);
+                    rt.DrawEllipse(&e, dis, 1.0 * s, None);
+                }
+                Btn::Color(i) => {
+                    let cb = brush(rt, PALETTE[i])?;
+                    let rr = rc(cx - u * 1.2, cy - u * 1.2, cx + u * 1.2, cy + u * 1.2);
+                    rt.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect: rr, radiusX: 3.0 * s, radiusY: 3.0 * s }, &cb);
+                    if i == self.color {
+                        let ring = rc(rr.left - 3.0 * s, rr.top - 3.0 * s, rr.right + 3.0 * s, rr.bottom + 3.0 * s);
+                        rt.DrawRoundedRectangle(
+                            &D2D1_ROUNDED_RECT { rect: ring, radiusX: 4.0 * s, radiusY: 4.0 * s },
+                            fg,
+                            1.5 * s,
+                            None,
+                        );
+                    } else {
+                        rt.DrawRoundedRectangle(
+                            &D2D1_ROUNDED_RECT { rect: rr, radiusX: 3.0 * s, radiusY: 3.0 * s },
+                            dis,
+                            1.0,
+                            None,
+                        );
+                    }
+                }
+                Btn::Copy | Btn::Panel => {}
             }
-            // size readout on the colour row
-            if let Some((r, _)) = tb.iter().rev().find(|(_, b)| matches!(b, Btn::Color(7))) {
-                if let Some(f) = &self.fmt_ui {
-                    let txt = format!(
-                        "  {}: {:.0}",
-                        if self.tool == Tool::Text { t("editor.font_size") } else { t("editor.width") },
-                        self.size()
-                    );
-                    let w: Vec<u16> = txt.encode_utf16().collect();
-                    let (tw, _) = self.g.measure(&txt, f);
-                    let bgr = rc(r.right + 3.0 * s, r.top - 3.0 * s, r.right + tw + 12.0 * s, r.bottom + 3.0 * s);
-                    rt.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect: bgr, radiusX: 6.0 * s, radiusY: 6.0 * s }, &bg);
-                    rt.DrawText(
-                        &w,
-                        f,
-                        &rc(r.right + 4.0 * s, r.top + 8.0 * s, r.right + tw + 12.0 * s, r.bottom),
-                        &fg,
-                        D2D1_DRAW_TEXT_OPTIONS_NONE,
-                        DWRITE_MEASURING_MODE_NATURAL,
-                    );
+        }
+        Ok(())
+    }
+
+    /// A panel of the toolbar: a soft shadow, the fill and a thin border.
+    fn bar_panel(&self, rt: &ID2D1RenderTarget, r: D2D_RECT_F, fill: u32, border: u32) -> Result<()> {
+        let s = self.scale;
+        unsafe {
+            for (k, a) in [(6.0f32, 0x14u32), (3.0, 0x22)] {
+                let sh = brush(rt, a << 24)?;
+                let rr = rc(r.left - k * 0.5, r.top + k * 0.3, r.right + k * 0.5, r.bottom + k);
+                rt.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect: rr, radiusX: 10.0 * s, radiusY: 10.0 * s }, &sh);
+            }
+            let round = D2D1_ROUNDED_RECT { rect: r, radiusX: 8.0 * s, radiusY: 8.0 * s };
+            rt.FillRoundedRectangle(&round, &brush(rt, fill)?);
+            rt.DrawRoundedRectangle(&round, &brush(rt, border)?, 1.0, None);
+        }
+        Ok(())
+    }
+
+    fn draw_toolbar(&self, rt: &ID2D1RenderTarget) -> Result<()> {
+        let tb = self.toolbar();
+        if tb.is_empty() {
+            return Ok(());
+        }
+        let s = self.scale;
+        let (c_bg, c_line, c_hov, c_fg, c_dis, c_acc, c_on) = bar_colors(self.light);
+        unsafe {
+            let hov = brush(rt, c_hov)?;
+            let act = brush(rt, c_acc)?;
+            let fg = brush(rt, c_fg)?;
+            let on = brush(rt, c_on)?;
+            let dis = brush(rt, c_dis)?;
+            let main_top = tb[0].0.top;
+            let pad = 3.0 * s;
+            let (l, r) = (tb[0].0.left, tb[tb.len() - 1].0.right);
+            self.bar_panel(rt, rc(l - pad, main_top - pad, r + pad, main_top + 32.0 * s + pad), c_bg, c_line)?;
+            let hidden_tool = !matches!(self.tool, Tool::None) && !bar_lists().0.contains(&self.tool);
+            let fill = |r: &D2D_RECT_F, b: &ID2D1SolidColorBrush| {
+                let inner = rc(r.left + 2.0 * s, r.top + 2.0 * s, r.right - 2.0 * s, r.bottom - 2.0 * s);
+                rt.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect: inner, radiusX: 5.0 * s, radiusY: 5.0 * s }, b);
+            };
+            for (r, b) in &tb {
+                let open = matches!(
+                    (b, self.pop),
+                    (Btn::MoreTools, Some(Pop::Tools))
+                        | (Btn::MoreActions, Some(Pop::Actions))
+                        | (Btn::ColorDot, Some(Pop::Colors))
+                );
+                let active = matches!(b, Btn::Tool(t) if *t == self.tool) || *b == Btn::MoreTools && hidden_tool;
+                if *b == Btn::Copy {
+                    fill(r, &act);
+                    if let (Some(fi), Some(fu)) = (&self.fmt_icon, &self.fmt_ui) {
+                        let w: Vec<u16> = "\u{E73E}".encode_utf16().collect();
+                        let ir = rc(r.left + 10.0 * s, r.top, r.left + 28.0 * s, r.bottom);
+                        rt.DrawText(&w, fi, &ir, &on, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+                        let w: Vec<u16> = t("editor.copy_short").encode_utf16().collect();
+                        let tr = rc(r.left + 32.0 * s, r.top + 9.0 * s, r.right, r.bottom);
+                        rt.DrawText(&w, fu, &tr, &on, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+                    }
+                    continue;
+                }
+                if active {
+                    fill(r, &act);
+                } else if open || self.tb_hover == Some(*b) {
+                    fill(r, &hov);
+                }
+                let (g, gc) = if active { (&on, c_on) } else { (&fg, c_fg) };
+                let (g, gc) = match b {
+                    Btn::Undo if self.undo.is_empty() => (&dis, c_dis),
+                    Btn::Redo if self.redo.is_empty() => (&dis, c_dis),
+                    _ => (g, gc),
+                };
+                self.glyph(rt, *b, r, g, gc, &dis)?;
+            }
+            // the open panel
+            if let Some((panel, items)) = self.popup(&tb) {
+                self.bar_panel(rt, panel, c_bg, c_line)?;
+                let rows = self.pop == Some(Pop::Actions);
+                for (r, b) in &items {
+                    let active = matches!(b, Btn::Tool(t) if *t == self.tool);
+                    if active {
+                        fill(r, &act);
+                    } else if self.tb_hover == Some(*b) {
+                        fill(r, &hov);
+                    }
+                    let (g, gc) = if active { (&on, c_on) } else { (&fg, c_fg) };
+                    if rows {
+                        let sq = rc(r.left, r.top, r.left + (r.bottom - r.top), r.bottom);
+                        self.glyph(rt, *b, &sq, g, gc, &dis)?;
+                        if let Some(f) = &self.fmt_ui {
+                            let (name, k) = action_row(*b);
+                            let w: Vec<u16> = name.encode_utf16().collect();
+                            let tr = rc(sq.right + 4.0 * s, r.top + 8.0 * s, r.right, r.bottom);
+                            rt.DrawText(&w, f, &tr, &fg, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+                            let key = keys::label(k);
+                            let (kw, _) = self.g.measure(&key, f);
+                            let w: Vec<u16> = key.encode_utf16().collect();
+                            let kr = rc(r.right - kw - 10.0 * s, r.top + 8.0 * s, r.right, r.bottom);
+                            rt.DrawText(&w, f, &kr, &dis, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+                        }
+                    } else {
+                        self.glyph(rt, *b, r, g, gc, &dis)?;
+                    }
+                }
+                if self.pop == Some(Pop::Colors) {
+                    if let (Some(f), Some((last, _))) = (&self.fmt_ui, items.last()) {
+                        let w: Vec<u16> = self.size_readout().encode_utf16().collect();
+                        let tr = rc(last.right + 8.0 * s, last.top + 9.0 * s, panel.right, last.bottom);
+                        rt.DrawText(&w, f, &tr, &dis, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+                    }
                 }
             }
             if let (Some(n), None) = (&self.note, self.tb_hover) {
                 self.label(rt, n, tb[0].0.left, main_top - 30.0 * s, false)?;
             }
+            // tips for the icons (the action rows already say what they do)
             if let Some(h) = self.tb_hover {
-                if let Some((r, _)) = tb.iter().find(|(_, b)| *b == h) {
+                let pop_items = if self.pop == Some(Pop::Actions) {
+                    vec![]
+                } else {
+                    self.popup(&tb).map(|p| p.1).unwrap_or_default()
+                };
+                if let Some((r, _)) = tb.iter().chain(pop_items.iter()).find(|(_, b)| *b == h) {
                     let tip = h.tip();
-                    if let Some(f) = &self.fmt_ui {
+                    if let (Some(f), false) = (&self.fmt_ui, tip.is_empty()) {
                         let (tw, _) = self.g.measure(&tip, f);
                         let above = r.top <= main_top + 1.0;
                         let y = if above { main_top - 30.0 * s } else { r.bottom + 8.0 * s };
@@ -1594,6 +1810,14 @@ impl Ov {
     }
 
     fn press(&mut self, b: Btn) {
+        let toggle = |cur: Option<Pop>, p: Pop| if cur == Some(p) { None } else { Some(p) };
+        match b {
+            Btn::MoreTools => return self.pop = toggle(self.pop, Pop::Tools),
+            Btn::MoreActions => return self.pop = toggle(self.pop, Pop::Actions),
+            Btn::ColorDot => return self.pop = toggle(self.pop, Pop::Colors),
+            Btn::Panel => return,
+            _ => self.pop = None,
+        }
         match b {
             Btn::Tool(t) => self.set_tool(t),
             Btn::Undo => self.undo(),
@@ -1609,6 +1833,7 @@ impl Ov {
             Btn::Copy => self.finish(Action::Copy),
             Btn::Close => self.close(),
             Btn::Color(i) => self.color = i,
+            Btn::MoreTools | Btn::MoreActions | Btn::ColorDot | Btn::Panel => {}
         }
     }
 
@@ -1632,6 +1857,10 @@ impl Ov {
         self.mouse = (x, y);
         if let Some(b) = self.hit_toolbar(x, y) {
             self.press(b);
+            return;
+        }
+        // a click outside an open panel only closes it
+        if self.pop.take().is_some() {
             return;
         }
         if !self.forwarded {
@@ -2041,6 +2270,7 @@ impl Ov {
                 Some(idx) => self.delete_items(&[idx]),
                 None => return false,
             },
+            VK_ESCAPE if self.pop.is_some() => self.pop = None,
             VK_ESCAPE if !self.picked.is_empty() => self.picked.clear(),
             VK_ESCAPE => {
                 if self.tool != Tool::None {

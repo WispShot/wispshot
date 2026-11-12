@@ -20,6 +20,47 @@ pub enum Theme {
     Dark,
 }
 
+/// Editor tools that can sit on the toolbar: ini name, i18n key of the name.
+pub const BAR_TOOLS: [(&str, &str); 11] = [
+    ("rect", "tool.rect"),
+    ("ellipse", "tool.ellipse"),
+    ("arrow", "tool.arrow"),
+    ("line", "tool.line"),
+    ("measure", "tool.measure"),
+    ("pen", "tool.pen"),
+    ("marker", "tool.marker"),
+    ("text", "tool.text"),
+    ("counter", "tool.counter"),
+    ("mosaic", "tool.mosaic"),
+    ("blur", "tool.blur"),
+];
+/// Editor actions that can sit on the toolbar (Copy and Close always do).
+pub const BAR_ACTIONS: [(&str, &str); 8] = [
+    ("redact", "editor.redact"),
+    ("pin", "editor.pin"),
+    ("ocr", "editor.ocr"),
+    ("record", "editor.record"),
+    ("scroll", "editor.scroll"),
+    ("upload", "editor.upload"),
+    ("save", "editor.save"),
+    ("copy_file", "editor.copy_file"),
+];
+const DEFAULT_BAR_TOOLS: &str = "rect arrow pen text counter blur";
+const DEFAULT_BAR_ACTIONS: &str = "pin save";
+
+/// Known names from `v` ("rect, pen arrow"), in the table's order.
+fn parse_bar(v: &str, table: &[(&str, &str)]) -> Vec<String> {
+    let want: Vec<String> = v.split([',', ' ', ';']).map(|w| w.trim().to_ascii_lowercase()).collect();
+    table.iter().filter(|(n, _)| want.iter().any(|w| w == n)).map(|(n, _)| n.to_string()).collect()
+}
+
+static BAR: std::sync::RwLock<(Vec<String>, Vec<String>)> = std::sync::RwLock::new((Vec::new(), Vec::new()));
+
+/// The toolbar's tools and actions from the settings, for the editor.
+pub fn bar() -> (Vec<String>, Vec<String>) {
+    BAR.read().map(|b| b.clone()).unwrap_or_default()
+}
+
 /// A program from `[hotkeys] pause_in_apps`.
 #[derive(Clone, PartialEq, Debug)]
 pub struct PauseApp {
@@ -73,6 +114,10 @@ pub struct Config {
     pub pause_apps: Vec<PauseApp>,
     /// Ask GitHub once a day whether a newer version is out.
     pub check_updates: bool,
+    /// Editor toolbar: the tools and the actions shown on the bar (ini names, see BAR_TOOLS /
+    /// BAR_ACTIONS); the rest sit behind its "more" buttons.
+    pub bar_tools: Vec<String>,
+    pub bar_actions: Vec<String>,
     /// WispShot turned off "Print Screen opens screen capture" in Windows; turn it back on
     /// when no shortcut uses Print Screen any more (and on uninstall).
     pub snipping_restore: bool,
@@ -195,6 +240,12 @@ fn default_ini() -> String {
         t("ini.upload_host"),
         t("ini.upload_custom")
     );
+    s += &format!(
+        "\n[editor]\n; {}\ntoolbar_tools = {}\ntoolbar_actions = {}\n",
+        t("ini.toolbar"),
+        DEFAULT_BAR_TOOLS,
+        DEFAULT_BAR_ACTIONS
+    );
     s += &format!("\n[keys]\n; {}\n", t("ini.keys"));
     for d in DEFS.iter().filter(|d| d.scope != Scope::Global) {
         s += &format!("{} = {}\n", d.ini, d.default);
@@ -269,6 +320,8 @@ pub fn save(cfg: &Config) -> std::io::Result<()> {
         ("general", "language", cfg.language.clone()),
         ("general", "theme", theme.to_string()),
         ("general", "check_updates", tf(cfg.check_updates)),
+        ("editor", "toolbar_tools", cfg.bar_tools.join(" ")),
+        ("editor", "toolbar_actions", cfg.bar_actions.join(" ")),
         ("hotkeys", "pause_in_fullscreen", tf(cfg.pause_fullscreen)),
         ("hotkeys", "pause_in_apps", cfg.pause_apps.iter().map(|a| a.ini()).collect::<Vec<_>>().join(", ")),
         ("hotkeys", "snipping_restore", tf(cfg.snipping_restore)),
@@ -491,6 +544,8 @@ pub fn load() -> Config {
         pause_fullscreen: b("hotkeys.pause_in_fullscreen", true),
         pause_apps: parse_apps(&get("hotkeys.pause_in_apps", "")),
         check_updates: b("general.check_updates", true),
+        bar_tools: parse_bar(&get("editor.toolbar_tools", DEFAULT_BAR_TOOLS), &BAR_TOOLS),
+        bar_actions: parse_bar(&get("editor.toolbar_actions", DEFAULT_BAR_ACTIONS), &BAR_ACTIONS),
         snipping_restore: b("hotkeys.snipping_restore", false),
         save_dir: dir("output.save_dir", &FOLDERID_Pictures),
         save_ask: ask("output.save_mode", Some("output.quick_save"), true),
@@ -524,6 +579,9 @@ pub fn load() -> Config {
     crate::i18n::set(&cfg.language);
     crate::output::set_jpeg_quality(cfg.jpeg_quality);
     crate::ocr::set_language(&cfg.ocr_language);
+    if let Ok(mut b) = BAR.write() {
+        *b = (cfg.bar_tools.clone(), cfg.bar_actions.clone());
+    }
     FRAME_ON.store(cfg.frame != crate::frame::Style::Off, Ordering::Relaxed);
     THEME.store(cfg.theme as u8, Ordering::Relaxed);
     keys::activate(&cfg.keys);

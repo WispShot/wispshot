@@ -150,6 +150,9 @@ enum Act {
     OpenApp(usize),
     /// Scroll to a section of the Shortcuts page.
     Jump(usize),
+    /// Put a tool / an action on the editor toolbar or take it off (index into BAR_TOOLS / BAR_ACTIONS).
+    BarTool(usize),
+    BarAction(usize),
     CheckUpdates,
     Sponsor,
 }
@@ -829,6 +832,7 @@ impl St {
                     &mut body,
                     &mut |st, r, h| st.seg(rt, r, Sg::HistoryDays, &ages, h),
                 );
+                y = self.draw_bar_choice(rt, y, &mut body);
             }
             4 => {
                 let mut langs: Vec<&str> = vec![t("general.system")];
@@ -1011,6 +1015,64 @@ impl St {
                 }
             }
         }
+    }
+
+    /// Which tools and actions sit on the editor toolbar: two rows of chips, lit = on the bar.
+    fn draw_bar_choice(&self, rt: &ID2D1RenderTarget, y: f32, hits: &mut Hits) -> f32 {
+        let Some(f) = &self.f else { return y };
+        let p = &self.p;
+        let (x0, x1) = (NAV_W + 32.0, W - 32.0);
+        // lay the chips out first to know the card's height
+        let place = |names: &[(&'static str, &'static str)], start: f32| -> (Vec<(D2D_RECT_F, String)>, f32) {
+            let (mut x, mut cy) = (x0 + 18.0, start);
+            let mut out = vec![];
+            for (_, key) in names {
+                let label = t(key).split(" (").next().unwrap_or("").to_string();
+                let w = self.g.measure(&label, &f.sub).0 + 22.0;
+                if x + w > x1 - 18.0 {
+                    x = x0 + 18.0;
+                    cy += 32.0;
+                }
+                out.push((rc(x, cy, x + w, cy + 26.0), label));
+                x += w + 6.0;
+            }
+            (out, cy + 26.0)
+        };
+        let two = self.g.measure(t("capture.bar_sub"), &f.sub).0 > x1 - x0 - 36.0;
+        let head = if two { 84.0 } else { 64.0 };
+        let (tools, end_t) = place(&config::BAR_TOOLS, y + head + 22.0);
+        let (acts, end_a) = place(&config::BAR_ACTIONS, end_t + 34.0);
+        let h = end_a - y + 16.0;
+        rrect(rt, rc(x0, y, x1, y + h), 6.0, p.card, p.card_border);
+        txt(rt, t("capture.bar"), &f.body, rc(x0 + 18.0, y + 13.0, x1 - 18.0, y + 35.0), p.text);
+        txt(
+            rt,
+            t("capture.bar_sub"),
+            if two { &f.wrap } else { &f.sub },
+            rc(x0 + 18.0, y + 37.0, x1 - 18.0, y + head - 4.0),
+            p.sub,
+        );
+        let groups = [
+            (t("capture.bar_tools"), tools, &self.cfg.bar_tools, &config::BAR_TOOLS[..], y + head),
+            (t("capture.bar_actions"), acts, &self.cfg.bar_actions, &config::BAR_ACTIONS[..], end_t + 12.0),
+        ];
+        for (gi, (title, chips, on, table, ty)) in groups.into_iter().enumerate() {
+            txt(rt, title, &f.sub, rc(x0 + 18.0, ty, x1 - 18.0, ty + 20.0), p.sub);
+            for (i, (r, label)) in chips.iter().enumerate() {
+                let lit = on.iter().any(|n| n == table[i].0);
+                let a = if gi == 0 { Act::BarTool(i) } else { Act::BarAction(i) };
+                if lit {
+                    rrect(rt, *r, 13.0, p.accent, 0);
+                    txt(rt, label, &f.sub, rc(r.left + 11.0, r.top, r.right, r.bottom), p.on_accent);
+                } else {
+                    let bg = if self.hover == Some(a) { p.btn_hover } else { p.btn };
+                    rrect(rt, *r, 13.0, bg, p.btn_border);
+                    txt(rt, label, &f.sub, rc(r.left + 11.0, r.top, r.right, r.bottom), p.text);
+                }
+                hits.push((*r, a));
+            }
+        }
+        y + h + 4.0
     }
 
     /// Top of the scrolling area on the current page.
@@ -1543,6 +1605,21 @@ impl St {
                 }
             }
             Act::CancelPick => self.picking = None,
+            Act::BarTool(i) | Act::BarAction(i) => {
+                let (list, table) = match a {
+                    Act::BarTool(_) => (&mut self.cfg.bar_tools, &config::BAR_TOOLS[..]),
+                    _ => (&mut self.cfg.bar_actions, &config::BAR_ACTIONS[..]),
+                };
+                let Some((name, _)) = table.get(i) else { return };
+                let on = list.iter().any(|n| n == name);
+                let keep: Vec<String> = table
+                    .iter()
+                    .filter(|(n, _)| if n == name { !on } else { list.iter().any(|x| x == n) })
+                    .map(|(n, _)| n.to_string())
+                    .collect();
+                *list = keep;
+                self.commit(t("settings.saved"));
+            }
             Act::OpenApp(i) => self.open_app = if self.open_app == Some(i) { None } else { Some(i) },
             Act::Jump(i) => {
                 self.scroll = 0.0;

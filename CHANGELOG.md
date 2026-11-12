@@ -4,6 +4,11 @@
 
 ### Changed
 
+- The editor toolbar is shorter and follows the light or dark theme and the Windows accent color. It shows six
+  tools, the color, undo and redo, Pin, Save, Close and a labeled Copy button; the other tools and actions open
+  from two "more" buttons in small panels that match the bar (actions with their names and shortcuts). The
+  colors open from the color dot instead of a second row. Choose what sits on the bar under *Settings >
+  Capture > On the editor toolbar* (`[editor] toolbar_tools`, `toolbar_actions`).
 - Settings > Shortcuts: a row of buttons under the title jumps to each section (Programs, Global, Editing, Video,
   Pinned), so the list no longer has to be scrolled through. The groups have clearer names (*Editing a
   screenshot*, *Drawing on a video recording*), and *Turn shortcuts off in some programs* says plainly which

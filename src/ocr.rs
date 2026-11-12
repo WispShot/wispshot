@@ -53,6 +53,34 @@ fn is_english(tag: &str) -> bool {
 /// be English. The engine Windows picks on its own (the first profile language) reads
 /// Turkish badly on an English Windows and English badly on a Turkish one, so with a
 /// Latin-script language besides English in the user's list we read with that first.
+/// The languages the user works in: the Windows language list, then the keyboard layouts.
+/// Many work PCs run an English Windows with a Turkish keyboard added under English, so
+/// Turkish is only seen in the keyboard list.
+fn user_languages() -> Vec<HSTRING> {
+    let mut out: Vec<HSTRING> =
+        GlobalizationPreferences::Languages().map(|v| v.into_iter().collect()).unwrap_or_default();
+    unsafe {
+        use windows::Win32::Globalization::LCIDToLocaleName;
+        use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyboardLayoutList, HKL};
+        let n = GetKeyboardLayoutList(None);
+        let mut hkls = vec![HKL::default(); n.max(0) as usize];
+        let n = GetKeyboardLayoutList(Some(&mut hkls)).max(0) as usize;
+        for h in &hkls[..n] {
+            let langid = (h.0 as usize & 0xFFFF) as u32;
+            let mut buf = [0u16; 85];
+            let len = LCIDToLocaleName(langid, Some(&mut buf), 0);
+            if len > 1 {
+                let tag = HSTRING::from_wide(&buf[..len as usize - 1]);
+                let base = |t: &HSTRING| t.to_string_lossy().split('-').next().unwrap_or("").to_ascii_lowercase();
+                if !out.iter().any(|o| base(o) == base(&tag)) {
+                    out.push(tag);
+                }
+            }
+        }
+    }
+    out
+}
+
 fn engines() -> Result<(OcrEngine, Option<OcrEngine>)> {
     let want = LANGUAGE.read().map(|l| l.clone()).unwrap_or_default();
     if !want.is_empty() && !want.eq_ignore_ascii_case("auto") {
@@ -62,17 +90,15 @@ fn engines() -> Result<(OcrEngine, Option<OcrEngine>)> {
     }
     let mut native = None;
     let mut english = None;
-    if let Ok(list) = GlobalizationPreferences::Languages() {
-        for tag in list {
-            let Ok(lang) = Language::CreateLanguage(&tag) else { continue };
-            if !OcrEngine::IsLanguageSupported(&lang).unwrap_or(false) {
-                continue;
-            }
-            if is_english(&tag.to_string_lossy()) {
-                english.get_or_insert(lang);
-            } else if native.is_none() && lang.Script().map(|s| s == "Latn").unwrap_or(false) {
-                native = Some(lang);
-            }
+    for tag in user_languages() {
+        let Ok(lang) = Language::CreateLanguage(&tag) else { continue };
+        if !OcrEngine::IsLanguageSupported(&lang).unwrap_or(false) {
+            continue;
+        }
+        if is_english(&tag.to_string_lossy()) {
+            english.get_or_insert(lang);
+        } else if native.is_none() && lang.Script().map(|s| s == "Latn").unwrap_or(false) {
+            native = Some(lang);
         }
     }
     let Some(native) = native.and_then(|l| engine_for(&l)) else {
@@ -86,14 +112,16 @@ fn engines() -> Result<(OcrEngine, Option<OcrEngine>)> {
     Ok((native, english.and_then(|l| engine_for(&l))))
 }
 
-/// The user's main non-English Latin-script language, by its own name ("Türkçe"), when
-/// Windows has no OCR pack for it: text in it is then read with the wrong letters.
+/// The user's main non-English Latin-script language (from the language list or a keyboard),
+/// by its own name ("Türkçe"), when Windows has no OCR pack for it: text in it is then read
+/// with the wrong letters.
 pub fn missing_language() -> Option<String> {
     let want = LANGUAGE.read().map(|l| l.clone()).unwrap_or_default();
     if !want.is_empty() && !want.eq_ignore_ascii_case("auto") {
         return None;
     }
-    for tag in GlobalizationPreferences::Languages().ok()? {
+    // the first such language decides; one with a pack means nothing is missing
+    for tag in user_languages() {
         let Ok(lang) = Language::CreateLanguage(&tag) else { continue };
         if is_english(&tag.to_string_lossy()) || !lang.Script().map(|s| s == "Latn").unwrap_or(false) {
             continue;

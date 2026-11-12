@@ -14,6 +14,10 @@
 
 ### Fixed
 
+- Text recognition also looks at your keyboard layouts. Many work PCs run an English Windows with a Turkish
+  keyboard added under English; Turkish wasn't in the language list there, so text was read with the English
+  engine ("Günaydln", "Mü9teri"). Now the Turkish engine reads it, or, if Windows has no Turkish text recognition
+  pack, a notice says how to add it.
 - A notice opens only an upload link or a file that exists, whatever another program sends the tray.
 
 ## [0.4.1] - 2026-11-12

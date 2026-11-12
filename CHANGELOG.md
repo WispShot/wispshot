@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-11-12
+
 ### Added
 
 - The portable copy updates itself too: *Install* downloads the portable zip, checks it against the release's

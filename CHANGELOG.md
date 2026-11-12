@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- On a new install `wispshot.ini` stayed empty until a setting was changed in the window (since 0.4.0).
+
 ### Changed
 
 - Text recognition (OCR) reads Turkish and other languages with extra letters much better. It used to read with

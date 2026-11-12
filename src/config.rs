@@ -159,8 +159,17 @@ pub fn ini_path() -> PathBuf {
     let p = dir.join("wispshot.ini");
     migrate(&dir.join("wisp.ini"), &p);
     // fall back to %APPDATA%\WispShot when the exe folder is read-only (e.g. Program Files)
-    if p.exists() || std::fs::OpenOptions::new().create(true).append(true).open(&p).map(|_| ()).is_ok() {
+    if p.exists() {
         return p;
+    }
+    match std::fs::OpenOptions::new().write(true).create_new(true).open(&p) {
+        Ok(_) => {
+            // this empty file is a first run, not a save in progress: load() fills it
+            FRESH.store(true, Ordering::Relaxed);
+            return p;
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => return p,
+        Err(_) => {}
     }
     let ad = std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_default().join("WispShot");
     let _ = std::fs::create_dir_all(&ad);
@@ -312,6 +321,8 @@ fn set_values(text: &str, vals: &[(&str, &str, String)], remove: &[&str]) -> Str
 }
 
 static THEME: AtomicU8 = AtomicU8::new(0);
+/// ini_path() just created the (empty) settings file.
+static FRESH: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static FRAME_ON: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Whether the share frame is on in the settings (the editor starts from this).
@@ -351,10 +362,11 @@ fn parse_kv(text: &str) -> std::collections::HashMap<String, String> {
 /// bindings to this process.
 pub fn load() -> Config {
     let path = ini_path();
+    let fresh = FRESH.swap(false, Ordering::Relaxed);
     let text = match std::fs::read_to_string(&path) {
         Ok(t) if !t.trim().is_empty() => t,
         // empty or locked: most likely a save in progress; use the defaults without writing them
-        Ok(_) | Err(_) if path.exists() => default_ini(),
+        Ok(_) | Err(_) if path.exists() && !fresh => default_ini(),
         _ => {
             // first run: comments in the Windows display language
             crate::i18n::set("system");

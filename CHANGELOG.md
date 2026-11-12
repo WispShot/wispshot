@@ -15,7 +15,7 @@
 - WispShot's own colors: the settings, the tray menu and the editor toolbar use an indigo from the logo instead of
   the Windows accent, the selected page is marked with the logo's gradient, and the "Saved" notice is a small
   card that matches the window.
-- The editor toolbar is shorter and follows the light or dark theme and the Windows accent color. It shows six
+- The editor toolbar is shorter and follows the light or dark theme. It shows six
   tools, the color, undo and redo, Pin, Save, Close and a labeled Copy button; the other tools and actions open
   from two "more" buttons in small panels that match the bar (actions with their names and shortcuts). The
   colors open from the color dot instead of a second row. Choose what sits on the bar under *Settings >

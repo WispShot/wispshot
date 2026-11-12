@@ -6,7 +6,7 @@
 
 <p align="center">
   A screenshot and screen recording tool for Windows that stays out of your way.<br>
-  One small exe, no installer, about 2 MB of memory and zero CPU while it waits.
+  One small exe, about 2 MB of memory and zero CPU while it waits. It keeps itself up to date.
 </p>
 
 <p align="center">
@@ -54,6 +54,23 @@ Measured on 10 November 2026 on one laptop (Windows 11, two 1080p monitors, one 
 default settings, using [`tools/bench/bench.ps1`](tools/bench/bench.ps1). The latency test presses the shortcut and
 times how long it takes until the screen visibly changes. Your numbers will differ; the gap in memory won't by much.
 
+## Made for a working day
+
+A few things you won't find together anywhere else:
+
+- **It gets out of the way of the programs you work in.** List a program such as SAP, Excel or a game launcher, choose
+  which shortcuts it keeps (SAP's F1 help and F3 back are also WispShot's defaults), and they go to that program
+  while it is in front. Full-screen games and videos get the same treatment on their own.
+- **Text recognition that reads your language.** OCR uses the engine built into Windows, but picks the right
+  language for the text and enlarges small screen text first: on an English Windows, Turkish UI text went from 15-18% wrong
+  characters to about 1%, without any download.
+- **Privacy built in.** `Ctrl+B` finds e-mail addresses, phone numbers, IBANs, card and ID numbers and API keys in
+  a capture and blurs them in one step. Nothing leaves your PC unless you press Upload, and there is no telemetry.
+- **Find any old screenshot by the words in it**, with the searchable history kept on your own disk.
+- **Draw on a video while you record**, with marks that fade by themselves.
+- **Small and quiet, and stays current.** About 2 MB of memory while idle; once a day it asks GitHub for a new
+  version and installs it in one click after checking its SHA-256.
+
 ## Features
 
 **Capture**
@@ -69,7 +86,8 @@ times how long it takes until the screen visibly changes. Your numbers will diff
 - Scroll to change the width, with a live preview at the cursor
 - Hold `Ctrl` to move or delete any drawing, or several at once; double-click text to edit it again
 - Unlimited undo and redo
-- **Share frame**: a margin, rounded corners and a shadow on a color, light or dark background (`F`)
+- **Frame**: a margin, rounded corners and a shadow on a colorful, light or dark background, so a capture looks
+  tidy in a chat or a document (`F`)
 - **Hide sensitive info** (`Ctrl+B`): finds e-mail addresses, phone numbers, IBANs, card numbers, ID numbers
   and API keys with Windows OCR and blurs them in one step (checksums keep ordinary numbers untouched)
 - **Scrolling capture**: scroll a long page inside the selected area (or let *Auto* do it) and get one tall image
@@ -81,7 +99,9 @@ times how long it takes until the screen visibly changes. Your numbers will diff
   (deleted after 3 hours, the IP is forgotten with the file) or [Litterbox](https://litterbox.catbox.moe) (1 or 3
   days), or your own server. Nothing leaves your PC until you press it, and the first time it asks you
 - Pin an image on top of other windows; zoom it, make it see-through, copy it again later
-- **OCR** with the text recognition built into Windows: nothing to download
+- **OCR** with the text recognition built into Windows: nothing to download. It reads with the right language
+  (Turkish, German, French...) and switches to English for English text, and tells you if Windows is missing
+  the language pack
 - **Searchable history** (off by default): the last captures stay on your PC and you can find one by the text
   in it, for example every screenshot that says "invoice". Old ones can be deleted after a day, a week or a month
 
@@ -97,9 +117,15 @@ times how long it takes until the screen visibly changes. Your numbers will diff
 </p>
 
 **Everything else**
-- Every shortcut can be changed in Settings
-- English and Turkish interface, light and dark theme (or follow Windows)
+- Every shortcut can be changed in Settings, with a bar to jump between its sections
+- **Turn shortcuts off in chosen programs**, one by one: pick the program from the ones open (shown with their
+  icons and names) and switch off only the keys it needs
+- **Print Screen** can take the screenshot: WispShot turns off the Windows screen capture for that key and gives it
+  back when you switch it off
 - Shortcuts step aside while a full-screen game or video is in front, so they reach that app instead
+- **Updates itself**: a daily check (one request to GitHub, can be turned off) and a one-click, checksum-verified
+  install that keeps your settings
+- English and Turkish interface, light and dark theme (or follow Windows)
 - Settings live in a plain `wispshot.ini` next to the exe, so it's portable
 
 ## Getting started
@@ -133,7 +159,7 @@ Right-click the tray icon for Settings, where you can change shortcuts, choose w
 <p align="center">
   <img src="docs/media/tray-menu.png" width="300" alt="The tray menu">
   &nbsp;
-  <img src="docs/media/settings.png" width="520" alt="The About page in Settings, showing the tray app using 1.9 MB">
+  <img src="docs/media/settings.png" width="520" alt="The Shortcuts page in Settings: section buttons at the top, and Notepad with the shortcuts that are off while it is in front">
 </p>
 
 **Requirements:** Windows 10 (version 2004 or newer) or Windows 11, 64-bit (x64). On Windows 11 for Arm the x64 build

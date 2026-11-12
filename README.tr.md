@@ -6,7 +6,7 @@
 
 <p align="center">
   Windows için, ihtiyacınız olana kadar ortalıkta görünmeyen bir ekran görüntüsü ve ekran kaydı aracı.<br>
-  Tek küçük exe, kurulum yok; beklerken yaklaşık 2 MB bellek ve sıfır işlemci.
+  Tek küçük exe; beklerken yaklaşık 2 MB bellek ve sıfır işlemci. Kendini güncel tutar.
 </p>
 
 <p align="center">
@@ -55,6 +55,24 @@ varsayılan ayarlarla, [`tools/bench/bench.ps1`](tools/bench/bench.ps1) ile. Gec
 gözle görülür biçimde değişmesine kadar geçen süreyi ölçer. Sizin sonuçlarınız farklı olacaktır; bellekteki fark
 pek değişmez.
 
+## İş gününe göre tasarlandı
+
+Başka bir araçta bir arada bulamayacağınız birkaç şey:
+
+- **Çalıştığınız programların yolundan çekilir.** SAP, Excel ya da bir oyun başlatıcı gibi bir programı listeye
+  ekleyin, hangi kısayolların kapanacağını seçin (SAP'nin F1 yardımı ve F3 geri tuşu WispShot'ın da varsayılanları);
+  o program öndeyken bu tuşlar ona gider. Tam ekran oyun ve videolarda bunu kendiliğinden yapar.
+- **Dilinizi okuyan metin tanıma.** OCR, Windows'un kendi motorunu kullanır ama yazının diline uygun motoru seçer ve
+  küçük ekran yazılarını önce büyütür: İngilizce bir Windows'ta Türkçe arayüz yazılarında hatalı karakter oranı %15-18'den
+  yaklaşık %1'e indi; hiçbir şey indirmeden.
+- **Gizlilik baştan düşünülmüş.** `Ctrl+B` bir çekimdeki e-posta, telefon, IBAN, kart ve kimlik numaralarını ve API
+  anahtarlarını bulup tek adımda bulanıklaştırır. Siz Yükle'ye basmadıkça bilgisayardan hiçbir şey çıkmaz,
+  telemetri yoktur.
+- **Eski bir ekran görüntüsünü içindeki yazıyla bulun**; aranabilir geçmiş kendi diskinizde durur.
+- **Kayıt sürerken videonun üzerine çizin**; işaretler kendiliğinden silinir.
+- **Küçük, sessiz ve güncel.** Beklerken yaklaşık 2 MB bellek; günde bir kez GitHub'a yeni sürüm var mı diye sorar,
+  SHA-256 ile doğruladıktan sonra tek tıkla kurar.
+
 ## Özellikler
 
 **Yakalama**
@@ -70,7 +88,8 @@ pek değişmez.
 - Tekerlekle kalınlık, imleçte anlık önizleme
 - `Ctrl` basılı tutarak herhangi bir çizimi ya da birkaçını birden taşıyın veya silin; metne çift tıklayıp yeniden düzenleyin
 - Sınırsız geri al ve yinele
-- **Paylaşım çerçevesi**: renkli, açık ya da koyu arka planda boşluk, yuvarlak köşe ve gölge (`F`)
+- **Çerçeve**: renkli, açık ya da koyu arka planda boşluk, yuvarlak köşe ve gölge; görüntü sohbette ve belgede
+  düzgün durur (`F`)
 - **Hassas bilgileri gizleme** (`Ctrl+B`): e-posta, telefon, IBAN, kart numarası, T.C. kimlik no ve API
   anahtarlarını Windows OCR ile bulup tek adımda bulanıklaştırır (sağlama hanesi denetimi sıradan sayılara dokunmaz)
 - **Kaydırmalı çekim**: seçili alanda uzun bir sayfayı kaydırın (ya da *Otomatik*e bırakın), tek bir uzun görüntü alın
@@ -82,7 +101,8 @@ pek değişmez.
   [Uguu](https://uguu.se) (3 saat sonra silinir, IP adresi dosyayla birlikte unutulur), [Litterbox](https://litterbox.catbox.moe)
   (1 ya da 3 gün) veya kendi sunucunuz. Siz basmadıkça bilgisayardan hiçbir şey çıkmaz; ilk seferde size sorar
 - Resmi diğer pencerelerin üstüne sabitleme; yakınlaştırma, saydamlaştırma, sonra yeniden kopyalama
-- Windows'un kendi metin tanıma motoruyla **OCR**: indirilecek bir şey yok
+- Windows'un kendi metin tanıma motoruyla **OCR**: indirilecek bir şey yok. Yazıyı doğru dille okur (Türkçe,
+  Almanca, Fransızca...), İngilizce yazıda İngilizceye geçer; Windows'ta dil paketi eksikse haber verir
 - **Aranabilir geçmiş** (varsayılan kapalı): son çekimler bilgisayarınızda kalır, içindeki yazıyla bulunur;
   örneğin içinde "fatura" geçen tüm ekran görüntüleri. Eskiler bir gün, bir hafta ya da bir ay sonra silinebilir
 
@@ -98,9 +118,15 @@ pek değişmez.
 </p>
 
 **Diğerleri**
-- Bütün kısayollar Ayarlar'dan değiştirilebilir
-- İngilizce ve Türkçe arayüz, açık ve koyu tema (ya da Windows'u izlesin)
+- Bütün kısayollar Ayarlar'dan değiştirilebilir; bölümler arasında geçiş için bir çubuk var
+- **Seçtiğiniz programlarda kısayolları kapatın**, tek tek: programı açık olanlar arasından seçin (ikonu ve adıyla
+  görünür), yalnızca onun ihtiyaç duyduğu tuşları kapatın
+- **Print Screen** ekran görüntüsü alabilir: WispShot bu tuş için Windows'un ekran alıntısını kapatır, anahtarı
+  kapatınca tuşu geri verir
 - Önde tam ekran bir oyun ya da video varken kısayollar kenara çekilir, tuşlar o uygulamaya gider
+- **Kendini günceller**: günlük bir denetim (GitHub'a tek istek, kapatılabilir) ve ayarlarınızı koruyan, sağlaması
+  doğrulanmış tek tıkla kurulum
+- İngilizce ve Türkçe arayüz, açık ve koyu tema (ya da Windows'u izlesin)
 - Ayarlar exe'nin yanındaki düz bir `wispshot.ini` dosyasında durur, yani taşınabilir
 
 ## Başlarken
@@ -134,7 +160,7 @@ ve *Windows ile başlat*'ı açabilirsiniz.
 <p align="center">
   <img src="docs/media/tray-menu.png" width="300" alt="Tepsi menüsü">
   &nbsp;
-  <img src="docs/media/settings.png" width="520" alt="Ayarlar'daki Hakkında sayfası: tepsi uygulaması 1,9 MB kullanıyor">
+  <img src="docs/media/settings.png" width="520" alt="Ayarlar'daki Kısayollar sayfası: üstte bölüm düğmeleri, altta Notepad ve o öndeyken kapalı olan kısayollar">
 </p>
 
 **Gereksinimler:** Windows 10 (2004 veya sonrası) ya da Windows 11, 64 bit (x64). Arm işlemcili Windows 11'de x64

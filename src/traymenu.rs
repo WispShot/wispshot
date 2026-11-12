@@ -46,7 +46,7 @@ struct Theme {
     off_knob: u32,
 }
 
-fn reg_dword(path: PCWSTR, name: PCWSTR) -> Option<u32> {
+pub(crate) fn reg_dword(path: PCWSTR, name: PCWSTR) -> Option<u32> {
     let mut v = 0u32;
     let mut n = 4u32;
     unsafe {

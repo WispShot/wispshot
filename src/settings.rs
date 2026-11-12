@@ -28,6 +28,38 @@ const NAV_W: f32 = 232.0;
 /// Page content scrolls below the fixed page title.
 const VIEW_TOP: f32 = 76.0;
 const TIMER_TOAST: usize = 1;
+/// Posted after Print Screen became a shortcut: ask about Windows' own use of it (outside any borrow).
+const WM_APP_ASK_SNIP: u32 = WM_APP + 1;
+const KBD_KEY: PCWSTR = w!("Control Panel\\Keyboard");
+const SNIP_VALUE: PCWSTR = w!("PrintScreenKeyForSnippingEnabled");
+const VK_PRINT: u16 = 0x2C;
+
+/// Windows opens its screen capture on Print Screen (on when the value is missing, as on Windows 11).
+fn snipping_on() -> bool {
+    crate::traymenu::reg_dword(KBD_KEY, SNIP_VALUE).unwrap_or(1) != 0
+}
+
+fn set_snipping(on: bool) -> bool {
+    let v: u32 = on as u32;
+    unsafe {
+        windows::Win32::System::Registry::RegSetKeyValueW(
+            windows::Win32::System::Registry::HKEY_CURRENT_USER,
+            KBD_KEY,
+            SNIP_VALUE,
+            windows::Win32::System::Registry::REG_DWORD.0,
+            Some(&v as *const u32 as *const _),
+            4,
+        )
+        .is_ok()
+    }
+}
+
+/// Some system-wide shortcut is Print Screen (with or without modifiers).
+fn uses_print(cfg: &Config) -> bool {
+    DEFS.iter()
+        .filter(|d| d.scope == Scope::Global)
+        .any(|d| keys::parse(cfg.key(d.k)).map(|c| c.vk == VK_PRINT).unwrap_or(false))
+}
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Tg {
@@ -968,6 +1000,10 @@ impl St {
     // ------------------------------------------------------------- actions
 
     fn commit(&mut self, toast: &str) {
+        // Print Screen is no longer ours: give it back to Windows if we took it
+        if self.cfg.snipping_restore && !uses_print(&self.cfg) && set_snipping(true) {
+            self.cfg.snipping_restore = false;
+        }
         match config::save(&self.cfg) {
             Ok(()) => {
                 crate::ipc_send(crate::IPC_RELOAD, "");
@@ -1149,6 +1185,11 @@ impl St {
         self.cfg.set_key(k, text);
         self.stop_recording();
         self.commit(if cleared { t("keys.removed") } else { t("keys.saved") });
+        if !cleared && keys::def(k).scope == Scope::Global && vk == VK_PRINT && snipping_on() {
+            unsafe {
+                let _ = PostMessageW(Some(self.hwnd), WM_APP_ASK_SNIP, WPARAM(0), LPARAM(0));
+            }
+        }
         true
     }
 
@@ -1447,6 +1488,22 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             DefWindowProcW(hwnd, msg, wp, lp)
         }
         WM_SYSCHAR if with(|s| s.recording.is_some()) == Some(true) => LRESULT(0),
+        WM_APP_ASK_SNIP => {
+            let (title, body) = (output::wide(t("snip.title")), output::wide(t("snip.ask")));
+            let r = MessageBoxW(Some(hwnd), PCWSTR(body.as_ptr()), PCWSTR(title.as_ptr()), MB_YESNO | MB_ICONQUESTION);
+            if r == IDYES {
+                with(|s| {
+                    if set_snipping(false) {
+                        s.cfg.snipping_restore = true;
+                        s.commit(t("snip.done"));
+                    } else {
+                        s.show_toast(t("snip.failed"), true);
+                    }
+                });
+                redraw(hwnd);
+            }
+            LRESULT(0)
+        }
         WM_TIMER if wp.0 == TIMER_TOAST => {
             let _ = KillTimer(Some(hwnd), TIMER_TOAST);
             with(|s| s.toast = None);

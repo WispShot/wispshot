@@ -34,6 +34,9 @@ pub struct Config {
     pub pause_apps: Vec<String>,
     /// Ask GitHub once a day whether a newer version is out.
     pub check_updates: bool,
+    /// WispShot turned off "Print Screen opens screen capture" in Windows; turn it back on
+    /// when no shortcut uses Print Screen any more (and on uninstall).
+    pub snipping_restore: bool,
     pub save_dir: PathBuf,
     /// true: ask for a location every time; false: save straight into `save_dir`.
     pub save_ask: bool,
@@ -229,6 +232,7 @@ pub fn save(cfg: &Config) -> std::io::Result<()> {
         ("general", "check_updates", tf(cfg.check_updates)),
         ("hotkeys", "pause_in_fullscreen", tf(cfg.pause_fullscreen)),
         ("hotkeys", "pause_in_apps", cfg.pause_apps.join(", ")),
+        ("hotkeys", "snipping_restore", tf(cfg.snipping_restore)),
         ("output", "save_dir", dir(&cfg.save_dir, default_save_dir())),
         ("output", "save_mode", mode(cfg.save_ask)),
         ("output", "notify", tf(cfg.save_notify)),
@@ -444,6 +448,7 @@ pub fn load() -> Config {
         pause_fullscreen: b("hotkeys.pause_in_fullscreen", true),
         pause_apps: parse_apps(&get("hotkeys.pause_in_apps", "")),
         check_updates: b("general.check_updates", true),
+        snipping_restore: b("hotkeys.snipping_restore", false),
         save_dir: dir("output.save_dir", &FOLDERID_Pictures),
         save_ask: ask("output.save_mode", Some("output.quick_save"), true),
         save_notify: b("output.notify", true),

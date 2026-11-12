@@ -4,6 +4,9 @@
 
 ### Added
 
+- Print Screen as a shortcut: when you pick it in Settings while Windows uses the key for its own screen capture,
+  WispShot asks once whether it should take the key over and changes that Windows setting for you. Choose another
+  shortcut (or uninstall) and the key goes back to Windows.
 - Updates: once a day WispShot asks GitHub whether a new version is out and says so from the tray. One click
   downloads the setup, checks it against the release's SHA-256 list, installs it silently and starts WispShot
   again; your settings stay. The portable copy opens the release page. Turn it off under *Settings > General*

@@ -124,6 +124,10 @@ var
 begin
   if CurUninstallStep <> usUninstall then
     Exit;
+  { WispShot took Print Screen from the Windows screen capture: give it back }
+  if (GetIniString('hotkeys', 'snipping_restore', '', ExpandConstant('{app}\wispshot.ini')) = 'true') or
+     (GetIniString('hotkeys', 'snipping_restore', '', ExpandConstant('{userappdata}\WispShot\wispshot.ini')) = 'true') then
+    RegWriteDWordValue(HKCU, 'Control Panel\Keyboard', 'PrintScreenKeyForSnippingEnabled', 1);
   if RegQueryStringValue(HKCU, RunKey, 'WispShot', Value) then
     if Pos(Lowercase(ExpandConstant('{app}\wispshot.exe')), Lowercase(Value)) > 0 then
       RegDeleteValue(HKCU, RunKey, 'WispShot');

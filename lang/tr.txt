@@ -18,6 +18,7 @@ menu.videos_folder = Videolar klasörü
 menu.settings = Ayarlar
 menu.autostart = Windows ile başlat
 menu.sponsor = WispShot'a destek ol
+menu.update = WispShot {0} sürümünü yükle
 menu.exit = Çıkış
 menu.paused = Tam ekran bir uygulama açıkken kısayollar duraklatıldı
 hotkey_taken.title = Kısayol kullanılamıyor
@@ -322,6 +323,7 @@ about.sponsor = Sponsor ol
 ini.header = WispShot ayarları. Bunları tepsi menüsündeki Ayarlar'dan da değiştirebilirsiniz.\nElle yaptığınız değişiklikler dosyayı kaydettiğiniz anda uygulanır.\nKısayol örnekleri: F1, Ctrl+Shift+A, Alt+PrintScreen. Kısayolu kapatmak için boş bırakın.
 ini.language = system, en ya da tr
 ini.theme = system, light ya da dark
+ini.check_updates = Günde bir kez GitHub'a yeni sürüm var mı diye sor (true / false)
 ini.pause_fullscreen = Tam ekran oyun ve videolar kendi tuşlarını kullanabilsin
 ini.pause_apps = Kendi tuşlarını (F1, F3...) kullanacak programlar, virgülle: pause_in_apps = saplogon.exe, excel.exe
 ini.save_dir = Boş bırakılırsa Resimler\WispShot
@@ -345,3 +347,14 @@ ini.history_ocr = Geçmişte arama için her görüntüdeki yazıyı oku
 ini.upload_host = Yükle'nin gönderdiği yer: uguu (3 saat), litterbox_24h, litterbox_72h veya custom
 ini.upload_custom = custom: kendi sunucunuz (multipart POST, yanıtta link olmalı)
 ini.keys = Çekim düzenleyicisi, kayıt üzerine çizim ve sabitlenen resimlerdeki kısayollar
+
+# ---- updates
+update.ready_title = WispShot {0} çıktı
+update.ready = Yüklemek için buraya tıklayın. Ayarlarınız olduğu gibi kalır.
+update.downloading_title = WispShot {0} indiriliyor
+update.downloading = Güncelleme yüklenince WispShot kendiliğinden yeniden açılır.
+update.failed_title = Güncelleme yüklenemedi
+update.failed = {0}. GitHub'daki WispShot sayfasından indirebilirsiniz.
+update.up_to_date = En yeni sürümü kullanıyorsunuz ({0}).
+general.updates = Güncellemeleri denetle
+general.updates_sub = WispShot günde bir kez GitHub'a yeni sürüm var mı diye sorar

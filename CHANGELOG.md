@@ -4,6 +4,11 @@
 
 ### Added
 
+- Updates: once a day WispShot asks GitHub whether a new version is out and says so from the tray. One click
+  downloads the setup, checks it against the release's SHA-256 list, installs it silently and starts WispShot
+  again; your settings stay. The portable copy opens the release page. Turn it off under *Settings > General*
+  (`[general] check_updates`). The check runs in a short-lived process, so the tray app stays as small as before.
+  Coming from 0.4.0 this is a one-time manual install, after that it updates itself.
 - Pause the shortcuts in chosen programs (*Settings > Shortcuts > Programs that keep their own keys*, or
   `[hotkeys] pause_in_apps = saplogon.exe, excel.exe`). While one of them is in front, its own keys (SAP uses F1,
   F3 and Shift+F1, which are also WispShot's defaults) go to it, and the shortcuts come back as soon as you switch

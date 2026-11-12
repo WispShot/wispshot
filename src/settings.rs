@@ -40,6 +40,7 @@ enum Tg {
     Detect,
     History,
     Autostart,
+    Updates,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -420,6 +421,7 @@ impl St {
             Tg::Detect => c.detect_elements,
             Tg::History => c.history,
             Tg::Autostart => self.autostart,
+            Tg::Updates => c.check_updates,
         }
     }
 
@@ -722,6 +724,15 @@ impl St {
                     &mut body,
                     &mut |st, r, h| st.toggle(rt, r, Tg::Autostart, h),
                 );
+                card(
+                    self,
+                    &mut y,
+                    t("general.updates"),
+                    t("general.updates_sub"),
+                    140.0,
+                    &mut body,
+                    &mut |st, r, h| st.toggle(rt, r, Tg::Updates, h),
+                );
                 card(self, &mut y, t("general.ini"), t("general.ini_sub"), 130.0, &mut body, &mut |st, r, h| {
                     let b = rc(
                         r.right - 18.0 - 90.0,
@@ -1007,6 +1018,7 @@ impl St {
                     Tg::Magnifier => c.magnifier = v,
                     Tg::Detect => c.detect_elements = v,
                     Tg::History => c.history = v,
+                    Tg::Updates => c.check_updates = v,
                     Tg::Autostart => {
                         crate::set_autostart(v);
                         self.autostart = crate::autostart_enabled();

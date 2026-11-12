@@ -121,6 +121,12 @@ The files aren't code-signed yet, so Windows SmartScreen may say it "protected y
 [GitHub Actions](.github/workflows/release.yml), with a build provenance attestation you can check with
 `gh attestation verify <file> --repo WispShot/wispshot`.
 
+**Updates.** Once a day WispShot asks GitHub whether a new version is out (one request to github.com, nothing
+about you or your captures is sent). When there is one, the tray icon says so; click it and the installed version
+downloads the setup, checks it against the release's SHA-256 list, installs it and starts again. The portable copy
+opens the release page instead. Turn it off under *Settings > General*, or with `winget upgrade WispShot.WispShot`
+once it is in WinGet.
+
 Right-click the tray icon for Settings, where you can change shortcuts, choose where files are saved and turn on
 *Start with Windows*.
 

@@ -32,6 +32,8 @@ pub struct Config {
     /// Release the hotkeys while one of these programs is in front (lowercase exe names,
     /// "saplogon.exe"): their own keys such as F1 or F3 keep working there.
     pub pause_apps: Vec<String>,
+    /// Ask GitHub once a day whether a newer version is out.
+    pub check_updates: bool,
     pub save_dir: PathBuf,
     /// true: ask for a location every time; false: save straight into `save_dir`.
     pub save_ask: bool,
@@ -116,6 +118,7 @@ fn default_ini() -> String {
     s += "\n[general]\n";
     s += &format!("; {}\nlanguage = system\n", t("ini.language"));
     s += &format!("; {}\ntheme = system\n", t("ini.theme"));
+    s += &format!("; {}\ncheck_updates = true\n", t("ini.check_updates"));
     s += "\n[hotkeys]\n";
     for d in DEFS.iter().filter(|d| d.scope == Scope::Global) {
         s += &format!("{} = {}\n", d.ini, d.default);
@@ -223,6 +226,7 @@ pub fn save(cfg: &Config) -> std::io::Result<()> {
     let mut vals: Vec<(&str, &str, String)> = vec![
         ("general", "language", cfg.language.clone()),
         ("general", "theme", theme.to_string()),
+        ("general", "check_updates", tf(cfg.check_updates)),
         ("hotkeys", "pause_in_fullscreen", tf(cfg.pause_fullscreen)),
         ("hotkeys", "pause_in_apps", cfg.pause_apps.join(", ")),
         ("output", "save_dir", dir(&cfg.save_dir, default_save_dir())),
@@ -439,6 +443,7 @@ pub fn load() -> Config {
         theme,
         pause_fullscreen: b("hotkeys.pause_in_fullscreen", true),
         pause_apps: parse_apps(&get("hotkeys.pause_in_apps", "")),
+        check_updates: b("general.check_updates", true),
         save_dir: dir("output.save_dir", &FOLDERID_Pictures),
         save_ask: ask("output.save_mode", Some("output.quick_save"), true),
         save_notify: b("output.notify", true),

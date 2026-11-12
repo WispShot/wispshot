@@ -37,6 +37,7 @@ mod session;
 mod settings;
 mod textedit;
 mod traymenu;
+mod update;
 mod upload;
 mod veil;
 
@@ -136,6 +137,8 @@ const CMD_MENU: usize = 111;
 const CMD_DELAY: usize = 112;
 const CMD_HISTORY: usize = 113;
 const CMD_SPONSOR: usize = 114;
+/// Download and install the newer version the daily check found.
+const CMD_UPDATE: usize = 115;
 
 // session -> resident messages (WM_COPYDATA dwData)
 pub const IPC_NOTIFY: usize = 1;
@@ -148,6 +151,8 @@ pub const IPC_RELOAD: usize = 5;
 pub const IPC_HOTKEYS: usize = 6;
 /// A session read text in a language Windows has no OCR pack for (its name follows).
 pub const IPC_OCR_HINT: usize = 7;
+/// `--update check` found a newer version (it follows).
+pub const IPC_UPDATE: usize = 8;
 /// The OCR language hint was shown since the tray started (once is enough).
 static OCR_HINTED: AtomicBool = AtomicBool::new(false);
 
@@ -169,6 +174,8 @@ struct State {
     /// first and goes full screen a moment later, with no further focus change.
     loc_hook: HWINEVENTHOOK,
     loc_pid: u32,
+    /// A newer version the update check found ("0.4.1").
+    update: Option<String>,
 }
 
 /// While suspended, re-check this often (a game can leave full screen without a focus change).
@@ -177,6 +184,10 @@ const TIMER_FULLSCREEN: usize = 2;
 const TIMER_CANCEL_DELAY: usize = 3;
 /// Hourly check for history images past their age limit.
 const TIMER_EXPIRE: usize = 4;
+/// Ask for a newer version two minutes after start, then once a day.
+const TIMER_UPDATE: usize = 5;
+/// The balloon click target of an update notice.
+const UPDATE_MARK: &str = "wispshot:update";
 
 thread_local! {
     /// When the last countdown session was started (it takes a moment to show its window).
@@ -206,6 +217,11 @@ fn main() {
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::env::temp_dir().join("WispShot-selftest"));
         std::process::exit(selftest::run(&dir));
+    }
+    if args.first().map(|s| s.as_str()) == Some("--update") {
+        // like a session: its notices go through the tray
+        IS_SESSION.store(true, Ordering::Relaxed);
+        std::process::exit(update::run(args.get(1).map(|s| s.as_str()).unwrap_or("check")));
     }
     if args.first().map(|s| s.as_str()) == Some("--session") {
         IS_SESSION.store(true, Ordering::Relaxed);
@@ -276,6 +292,7 @@ fn resident(args: Vec<String>) {
         let cfg = config::load();
         history::expire(cfg.history_days);
         SetTimer(Some(hwnd), TIMER_EXPIRE, 3_600_000, None);
+        SetTimer(Some(hwnd), TIMER_UPDATE, 120_000, None);
         watch_ini(hwnd);
         let small = GetSystemMetrics(SM_CXSMICON).max(16);
         let state = State {
@@ -291,12 +308,15 @@ fn resident(args: Vec<String>) {
             fg_hook: HWINEVENTHOOK::default(),
             loc_hook: HWINEVENTHOOK::default(),
             loc_pid: 0,
+            update: None,
         };
         ST.with(|s| *s.borrow_mut() = Some(state));
         tray(NIM_ADD);
         register_hotkeys(true);
         watch_fullscreen();
         output::clean_temp();
+        // the setup an update downloaded (it has finished by the time we start again)
+        let _ = std::fs::remove_dir_all(std::env::temp_dir().join("WispShot-update"));
         if cmd != 0 {
             let _ = PostMessageW(Some(hwnd), WM_APP_CMD, WPARAM(cmd), LPARAM(0));
         }
@@ -612,6 +632,13 @@ pub fn notify(title: &str, text: &str) {
     }
 }
 
+/// `wispshot.exe --update check|install` in its own process (WinHTTP stays out of the tray).
+fn spawn_update(what: &str) {
+    if let Ok(exe) = std::env::current_exe() {
+        let _ = std::process::Command::new(exe).args(["--update", what]).spawn();
+    }
+}
+
 /// Session -> resident message.
 pub fn ipc_send(kind: usize, text: &str) {
     unsafe {
@@ -684,7 +711,12 @@ fn tray_menu() {
         key: key.to_string(),
         danger: false,
     };
-    let mut rows = vec![
+    let mut rows = vec![];
+    if let Some(Some(v)) = with(|s| s.update.clone()) {
+        rows.push(item(CMD_UPDATE, '\u{E896}', &tf("menu.update", &[&v]), ""));
+        rows.push(Row::Sep);
+    }
+    rows.extend([
         item(CMD_CAPTURE, '\u{E722}', t("menu.capture"), &cfg.key_label(K::Capture)),
         item(
             CMD_DELAY,
@@ -692,7 +724,7 @@ fn tray_menu() {
             &tf("menu.capture_delayed", &[&cfg.capture_delay.to_string()]),
             &cfg.key_label(K::CaptureDelayed),
         ),
-    ];
+    ]);
     rows.push(if recording {
         Row::Item {
             id: CMD_RECORD,
@@ -910,6 +942,7 @@ fn command(id: usize) {
         CMD_CLOSEPINS => close_all_pins(),
         CMD_SHOTS => open_path(&cfg.save_dir, false),
         CMD_VIDEOS => open_path(&cfg.video_dir, false),
+        CMD_UPDATE => spawn_update("install"),
         CMD_SPONSOR => unsafe {
             ShellExecuteW(None, w!("open"), w!("https://github.com/sponsors/efekaputlu"), None, None, SW_SHOWNORMAL);
         },
@@ -992,7 +1025,10 @@ unsafe extern "system" fn app_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                 NIN_BALLOONUSERCLICK => {
                     if let Some(Some(p)) = with(|s| s.last_file.clone()) {
                         let s = p.to_string_lossy();
-                        if s.starts_with("https://") || s.starts_with("http://") || s.starts_with("ms-settings:") {
+                        if s == UPDATE_MARK {
+                            command(CMD_UPDATE);
+                        } else if s.starts_with("https://") || s.starts_with("http://") || s.starts_with("ms-settings:")
+                        {
                             // an uploaded capture: open its link
                             let u = output::wide(&s);
                             ShellExecuteW(None, w!("open"), PCWSTR(u.as_ptr()), None, None, SW_SHOWNORMAL);
@@ -1012,6 +1048,13 @@ unsafe extern "system" fn app_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
         }
         WM_TIMER if wp.0 == TIMER_FULLSCREEN => {
             check_fullscreen();
+            LRESULT(0)
+        }
+        WM_TIMER if wp.0 == TIMER_UPDATE => {
+            SetTimer(Some(hwnd), TIMER_UPDATE, 86_400_000, None);
+            if with(|s| s.cfg.check_updates) == Some(true) {
+                spawn_update("check");
+            }
             LRESULT(0)
         }
         WM_TIMER if wp.0 == TIMER_EXPIRE => {
@@ -1047,6 +1090,13 @@ unsafe extern "system" fn app_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                 IPC_NOTIFY => {
                     let (t, b) = s.split_once('\u{1}').unwrap_or(("WispShot", s.as_str()));
                     notify(t, b);
+                }
+                IPC_UPDATE if update::newer(&s) => {
+                    // one notice per new version; the tray menu keeps offering it
+                    if with(|st| st.update.replace(s.clone()) != Some(s.clone())) == Some(true) {
+                        with(|st| st.last_file = Some(PathBuf::from(UPDATE_MARK)));
+                        notify(&tf("update.ready_title", &[&s]), t("update.ready"));
+                    }
                 }
                 IPC_OCR_HINT if !OCR_HINTED.swap(true, Ordering::Relaxed) => {
                     // a click on the notice opens the language settings

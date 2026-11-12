@@ -19,6 +19,7 @@ menu.videos_folder = Videos folder
 menu.settings = Settings
 menu.autostart = Start with Windows
 menu.sponsor = Support WispShot
+menu.update = Install WispShot {0}
 menu.exit = Quit
 menu.paused = Shortcuts are paused while a full-screen app is open
 hotkey_taken.title = Shortcut not available
@@ -323,6 +324,7 @@ about.sponsor = Sponsor
 ini.header = WispShot settings. You can also change them in the tray menu under Settings.\nChanges you make here by hand apply as soon as you save the file.\nShortcut examples: F1, Ctrl+Shift+A, Alt+PrintScreen. Leave a shortcut empty to turn it off.
 ini.language = system, en or tr
 ini.theme = system, light or dark
+ini.check_updates = Ask GitHub once a day whether a new version is out (true / false)
 ini.pause_fullscreen = Let full-screen games and videos keep their keys
 ini.pause_apps = Programs that keep their own keys (F1, F3...), comma-separated: pause_in_apps = saplogon.exe, excel.exe
 ini.save_dir = Empty means Pictures\WispShot
@@ -346,3 +348,14 @@ ini.history_ocr = Read the text in each image so the history can be searched
 ini.upload_host = Where Upload sends a capture: uguu (3 hours), litterbox_24h, litterbox_72h or custom
 ini.upload_custom = custom: your own server (multipart POST, the answer must contain the link)
 ini.keys = Shortcuts inside the capture editor, while drawing on a recording and on pinned images
+
+# ---- updates
+update.ready_title = WispShot {0} is out
+update.ready = Click here to install it. Your settings stay as they are.
+update.downloading_title = Getting WispShot {0}
+update.downloading = WispShot will restart by itself when the update is installed.
+update.failed_title = The update didn't install
+update.failed = {0}. You can download it from the WispShot page on GitHub.
+update.up_to_date = You have the newest version ({0}).
+general.updates = Check for updates
+general.updates_sub = Once a day WispShot asks GitHub whether a new version is out

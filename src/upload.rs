@@ -159,6 +159,24 @@ fn wide(s: &str) -> Vec<u16> {
 }
 
 fn post(u: &Url, body: &[u8], content_type: &str) -> Result<(u32, String), String> {
+    let r = request(u, w!("POST"), body, &format!("Content-Type: {content_type}\r\n"), true, 1 << 20)?;
+    Ok((r.code, String::from_utf8_lossy(&r.body).into_owned()))
+}
+
+pub(crate) struct Resp {
+    pub code: u32,
+    pub body: Vec<u8>,
+    /// The Location header (seen when redirects are not followed).
+    pub location: Option<String>,
+}
+
+/// GET `url`; `follow` = follow redirects; at most `max` bytes of body are kept.
+pub(crate) fn get(url: &str, follow: bool, max: usize) -> Result<Resp, String> {
+    let u = split_url(url).ok_or_else(|| "bad url".to_string())?;
+    request(&u, w!("GET"), &[], "", follow, max)
+}
+
+fn request(u: &Url, method: PCWSTR, body: &[u8], headers: &str, follow: bool, max: usize) -> Result<Resp, String> {
     let fail = |what: &str| format!("{what}: {}", windows::core::Error::from_thread().message());
     unsafe {
         let ua = wide(&format!("WispShot/{}", env!("CARGO_PKG_VERSION")));
@@ -177,7 +195,7 @@ fn post(u: &Url, body: &[u8], content_type: &str) -> Result<(u32, String), Strin
         let flags = if u.secure { WINHTTP_FLAG_SECURE } else { WINHTTP_OPEN_REQUEST_FLAGS(0) };
         let r = H(WinHttpOpenRequest(
             c.0,
-            w!("POST"),
+            method,
             PCWSTR(path.as_ptr()),
             PCWSTR::null(),
             PCWSTR::null(),
@@ -187,11 +205,15 @@ fn post(u: &Url, body: &[u8], content_type: &str) -> Result<(u32, String), Strin
         if r.0.is_null() {
             return Err(fail("request"));
         }
-        let headers: Vec<u16> = format!("Content-Type: {content_type}\r\n").encode_utf16().collect();
+        if !follow {
+            let off: u32 = WINHTTP_DISABLE_REDIRECTS;
+            let _ = WinHttpSetOption(Some(r.0), WINHTTP_OPTION_DISABLE_FEATURE, Some(&off.to_ne_bytes()));
+        }
+        let hdrs: Vec<u16> = headers.encode_utf16().collect();
         WinHttpSendRequest(
             r.0,
-            Some(&headers),
-            Some(body.as_ptr() as *const c_void),
+            if hdrs.is_empty() { None } else { Some(&hdrs) },
+            if body.is_empty() { None } else { Some(body.as_ptr() as *const c_void) },
             body.len() as u32,
             body.len() as u32,
             0,
@@ -208,11 +230,26 @@ fn post(u: &Url, body: &[u8], content_type: &str) -> Result<(u32, String), Strin
             &mut len,
             std::ptr::null_mut(),
         );
+        let mut loc = [0u16; 1024];
+        let mut len = (loc.len() * 2) as u32;
+        let location = WinHttpQueryHeaders(
+            r.0,
+            WINHTTP_QUERY_LOCATION,
+            PCWSTR::null(),
+            Some(loc.as_mut_ptr() as *mut c_void),
+            &mut len,
+            std::ptr::null_mut(),
+        )
+        .ok()
+        .map(|_| String::from_utf16_lossy(&loc[..len as usize / 2]));
         let mut out = vec![];
         loop {
             let mut avail = 0u32;
-            if WinHttpQueryDataAvailable(r.0, &mut avail).is_err() || avail == 0 || out.len() > 1 << 20 {
+            if WinHttpQueryDataAvailable(r.0, &mut avail).is_err() || avail == 0 {
                 break;
+            }
+            if out.len() + avail as usize > max {
+                return Err("answer too large".into());
             }
             let mut buf = vec![0u8; avail as usize];
             let mut got = 0u32;
@@ -221,7 +258,7 @@ fn post(u: &Url, body: &[u8], content_type: &str) -> Result<(u32, String), Strin
             }
             out.extend_from_slice(&buf[..got as usize]);
         }
-        Ok((code, String::from_utf8_lossy(&out).into_owned()))
+        Ok(Resp { code, body: out, location })
     }
 }
 

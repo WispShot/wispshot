@@ -66,6 +66,8 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{app}\wispshot.exe"; Description: "{cm:Launch}"; Flags: nowait postinstall skipifsilent
+; an update from the app itself (/restartapp=1) starts WispShot again
+Filename: "{app}\wispshot.exe"; Flags: nowait; Check: RestartApp
 
 [UninstallDelete]
 Type: files; Name: "{app}\wispshot.ini"
@@ -73,6 +75,11 @@ Type: files; Name: "{app}\wispshot.ini"
 [Code]
 const
   RunKey = 'Software\Microsoft\Windows\CurrentVersion\Run';
+
+function RestartApp(): Boolean;
+begin
+  Result := ExpandConstant('{param:restartapp|0}') = '1';
+end;
 
 { True while a wispshot.exe started from this install folder is running. A copy running from
   anywhere else (portable, dev build) is left alone. }

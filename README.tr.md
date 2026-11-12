@@ -122,6 +122,12 @@ Dosyalar henüz kod imzalı değil; Windows SmartScreen ilk seferde "bilgisayar�
 [GitHub Actions](.github/workflows/release.yml) ile derlenir; derleme kaynağı belgesini
 `gh attestation verify <dosya> --repo WispShot/wispshot` ile doğrulayabilirsiniz.
 
+**Güncellemeler.** WispShot günde bir kez GitHub'a yeni sürüm var mı diye sorar (github.com'a tek bir istek; sizinle
+ya da çektiklerinizle ilgili hiçbir şey gönderilmez). Yeni sürüm varsa tepsi simgesi haber verir. Tıklayınca kurulu
+sürüm kurulum dosyasını indirir, sürümdeki SHA-256 listesiyle karşılaştırır, kurar ve yeniden açılır. Taşınabilir
+sürüm bunun yerine sürüm sayfasını açar. *Ayarlar > Genel*'den kapatabilirsiniz; WinGet'e girdikten sonra
+`winget upgrade WispShot.WispShot` da kullanılabilir.
+
 Tepsi simgesine sağ tıklayıp Ayarlar'ı açın: kısayolları değiştirebilir, dosyaların nereye kaydedileceğini seçebilir
 ve *Windows ile başlat*'ı açabilirsiniz.
 

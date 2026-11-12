@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Settings > Shortcuts > programs: each shortcut line now says who gets the key while that program is in front,
+  with a WispShot | Program choice, instead of a switch that read as "this shortcut is on".
+
+### Fixed
+
+- Settings > About > *Check now* shows what it found on the card itself (newest version, the new version with an
+  Install or Download button, or why it could not check). Before, it relied on a tray notice that did not come when
+  the daily check had already announced that version, so the button seemed to do nothing.
+
 ## [0.4.2] - 2026-11-12
 
 ### Added

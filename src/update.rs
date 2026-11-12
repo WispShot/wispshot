@@ -25,7 +25,7 @@ pub fn newer(v: &str) -> bool {
 }
 
 /// The newest published version ("0.4.1").
-fn latest() -> Result<String, String> {
+pub fn latest() -> Result<String, String> {
     let r = get(&format!("{REPO}/releases/latest"), false, 1 << 16)?;
     let loc = r.location.ok_or_else(|| format!("HTTP {}", r.code))?;
     let tag = loc.trim_end_matches('/').rsplit('/').next().unwrap_or("");
@@ -33,7 +33,7 @@ fn latest() -> Result<String, String> {
 }
 
 /// Installed with the setup (it leaves its uninstaller next to the exe), not a portable copy.
-fn installed() -> bool {
+pub fn installed() -> bool {
     std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.join("unins000.exe").exists())).unwrap_or(false)
 }
 

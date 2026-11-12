@@ -33,6 +33,19 @@ const JUMP_H: f32 = 40.0;
 /// Sections of the Shortcuts page, for the jump bar (i18n keys).
 const JUMPS: [&str; 5] = ["keys.jump_apps", "keys.jump_global", "keys.jump_editor", "keys.jump_draw", "keys.jump_pin"];
 const TIMER_TOAST: usize = 1;
+/// The update check (its own thread) has a result in UPD_RESULT.
+const WM_UPDATE_DONE: u32 = WM_APP + 7;
+static UPD_RESULT: std::sync::Mutex<Option<std::result::Result<String, String>>> = std::sync::Mutex::new(None);
+
+/// What "Check now" found; shown on the Updates card itself, not only as a notice.
+#[derive(Clone, PartialEq)]
+enum Upd {
+    Idle,
+    Checking,
+    Latest,
+    New(String),
+    Failed(String),
+}
 const KBD_KEY: PCWSTR = w!("Control Panel\\Keyboard");
 const SNIP_VALUE: PCWSTR = w!("PrintScreenKeyForSnippingEnabled");
 const VK_PRINT: u16 = 0x2C;
@@ -144,8 +157,8 @@ enum Act {
     PickApp(usize),
     BrowseApp,
     CancelPick,
-    /// Whether shortcut K is off while program i is in front.
-    AppKey(usize, K),
+    /// While program i is in front, shortcut K goes to the program (true) or to WispShot.
+    AppKey(usize, K, bool),
     /// Show or hide the shortcut lines of program i.
     OpenApp(usize),
     /// Scroll to a section of the Shortcuts page.
@@ -154,6 +167,8 @@ enum Act {
     BarTool(usize),
     BarAction(usize),
     CheckUpdates,
+    /// Install the version the check found (a portable copy opens the download page).
+    InstallUpdate,
     Sponsor,
 }
 
@@ -284,6 +299,7 @@ struct St {
     open_app: Option<usize>,
     /// Where each Shortcuts section starts in the scrolling content (set while drawing).
     marks: std::cell::Cell<[f32; 5]>,
+    upd: Upd,
 }
 
 thread_local! {
@@ -428,6 +444,7 @@ pub fn open() -> bool {
                 app_info: vec![],
                 picking: None,
                 open_app: None,
+                upd: Upd::Idle,
                 marks: std::cell::Cell::new([0.0; 5]),
             })
         });
@@ -906,26 +923,25 @@ impl St {
                     None => t("about.memory_off").to_string(),
                 };
                 card(self, &mut y, t("about.memory"), &mem, 20.0, &mut body, &mut |_, _, _| {});
-                let label = t("about.check_updates");
+                let (sub, label, act) = match &self.upd {
+                    Upd::Idle => (t("about.updates_sub").to_string(), t("about.check_updates"), Act::CheckUpdates),
+                    Upd::Checking => (t("update.checking").to_string(), t("about.check_updates"), Act::CheckUpdates),
+                    Upd::Latest => (
+                        tf("update.up_to_date", &[env!("CARGO_PKG_VERSION")]),
+                        t("about.check_updates"),
+                        Act::CheckUpdates,
+                    ),
+                    Upd::New(v) => {
+                        let label = if crate::update::installed() { t("about.install") } else { t("about.download") };
+                        (tf("about.new_version", &[v]), label, Act::InstallUpdate)
+                    }
+                    Upd::Failed(e) => (tf("about.check_failed", &[e]), t("about.try_again"), Act::CheckUpdates),
+                };
                 let bw = self.g.measure(label, &f.body).0 + 32.0;
-                card(
-                    self,
-                    &mut y,
-                    t("about.updates"),
-                    t("about.updates_sub"),
-                    bw + 40.0,
-                    &mut body,
-                    &mut |st, r, h| {
-                        let cy = (r.top + r.bottom) / 2.0;
-                        st.button(
-                            rt,
-                            rc(r.right - 18.0 - bw, cy - 16.0, r.right - 18.0, cy + 16.0),
-                            label,
-                            Act::CheckUpdates,
-                            h,
-                        );
-                    },
-                );
+                card(self, &mut y, t("about.updates"), &sub, bw + 40.0, &mut body, &mut |st, r, h| {
+                    let cy = (r.top + r.bottom) / 2.0;
+                    st.button(rt, rc(r.right - 18.0 - bw, cy - 16.0, r.right - 18.0, cy + 16.0), label, act, h);
+                });
                 card(self, &mut y, t("about.license"), t("about.license_sub"), 20.0, &mut body, &mut |_, _, _| {});
                 card(self, &mut y, t("about.author"), "Efe Kaputlu", 20.0, &mut body, &mut |_, _, _| {});
                 card(self, &mut y, t("about.support"), t("about.support_sub"), 150.0, &mut body, &mut |st, r, h| {
@@ -1215,26 +1231,39 @@ impl St {
             txt(rt, &sub, &f.sub, rc(x0 + 54.0, y + 36.0, hr.right - 30.0, y + 58.0), p.sub);
             let mut ly = y + head;
             if is_open {
-                // one line per shortcut: what it does, its key, and a switch: on = off in this program
+                // one line per shortcut: what it does, its key, and who gets it: [WispShot | Program]
+                let (wisp, prog) = ("WispShot", t("keys.apps_to_program"));
+                let seg_w = self.g.measure(wisp, &f.sub).0.max(self.g.measure(prog, &f.sub).0) + 24.0;
                 for k in &bound {
                     let k = *k;
-                    let act = Act::AppKey(i, k);
+                    let to_prog = a.pauses(k);
+                    // the row switches; a click on the chosen half changes nothing
+                    let act = Act::AppKey(i, k, !to_prog);
                     let r = rc(x0 + 46.0, ly, x1 - 12.0, ly + line);
                     if self.hover == Some(act) {
                         rrect(rt, r, 4.0, p.hover, 0);
                     }
-                    let off = a.pauses(k);
-                    let sw = rc(r.right - 6.0 - 36.0, r.top + 7.0, r.right - 6.0, r.bottom - 7.0);
-                    let cy = (sw.top + sw.bottom) / 2.0;
-                    if off {
-                        rrect(rt, sw, 8.0, p.accent, 0);
-                        circle(rt, sw.right - 8.0, cy, 5.0, p.on_accent);
-                    } else {
-                        rrect(rt, sw, 8.0, 0, p.off_border);
-                        circle(rt, sw.left + 8.0, cy, 4.0, p.off_border);
+                    let seg = rc(r.right - 6.0 - 2.0 * seg_w, r.top + 4.0, r.right - 6.0, r.bottom - 4.0);
+                    rrect(rt, seg, 4.0, p.btn, p.btn_border);
+                    let halves = [(wisp, !to_prog), (prog, to_prog)];
+                    for (j, (name, chosen)) in halves.iter().enumerate() {
+                        let hl = seg.left + seg_w * j as f32;
+                        let hr = rc(hl, seg.top, hl + seg_w, seg.bottom);
+                        if *chosen {
+                            rrect(
+                                rt,
+                                rc(hr.left + 2.0, hr.top + 2.0, hr.right - 2.0, hr.bottom - 2.0),
+                                3.0,
+                                p.accent,
+                                0,
+                            );
+                        }
+                        let nw = self.g.measure(name, &f.sub).0;
+                        let col = if *chosen { p.on_accent } else { p.sub };
+                        txt(rt, name, &f.sub, rc((hr.left + hr.right - nw) / 2.0, hr.top, hr.right, hr.bottom), col);
                     }
                     let label = keys::display(self.cfg.key(k));
-                    let cap = rc(sw.left - 14.0 - key_w, r.top + 4.0, sw.left - 14.0, r.bottom - 4.0);
+                    let cap = rc(seg.left - 14.0 - key_w, r.top + 4.0, seg.left - 14.0, r.bottom - 4.0);
                     rrect(rt, cap, 4.0, p.btn, p.btn_border);
                     let lw = self.g.measure(&label, &f.sub).0;
                     txt(
@@ -1246,6 +1275,12 @@ impl St {
                     );
                     txt(rt, t(label_key(k)), &f.sub, rc(r.left + 8.0, r.top, cap.left - 10.0, r.bottom), p.text);
                     hits.push((r, act));
+                    let chosen_half = if to_prog {
+                        rc(seg.left + seg_w, seg.top, seg.right, seg.bottom)
+                    } else {
+                        rc(seg.left, seg.top, seg.left + seg_w, seg.bottom)
+                    };
+                    hits.push((chosen_half, Act::AppKey(i, k, to_prog)));
                     ly += line;
                 }
                 ly += pad;
@@ -1645,8 +1680,11 @@ impl St {
                 let to = self.marks.get()[i.min(4)];
                 self.scroll_by(if i == 0 { 0.0 } else { to - 4.0 });
             }
-            Act::AppKey(i, k) => {
+            Act::AppKey(i, k, to_prog) => {
                 let Some(app) = self.cfg.pause_apps.get_mut(i) else { return };
+                if app.pauses(k) == to_prog {
+                    return;
+                }
                 let mut on: Vec<K> = TRAY_KEYS.iter().copied().filter(|x| app.pauses(*x)).collect();
                 if let Some(at) = on.iter().position(|x| *x == k) {
                     if on.len() == 1 {
@@ -1666,10 +1704,26 @@ impl St {
                 self.commit(t("settings.saved"));
             }
             Act::CheckUpdates => {
-                if let Ok(exe) = std::env::current_exe() {
-                    let _ = std::process::Command::new(exe).args(["--update", "checknow"]).spawn();
+                if self.upd == Upd::Checking {
+                    return;
                 }
-                self.show_toast(t("update.checking"), false);
+                self.upd = Upd::Checking;
+                // this window is its own short-lived process, so WinHTTP never reaches the tray
+                let hwnd = self.hwnd.0 as isize;
+                std::thread::spawn(move || {
+                    let r = crate::update::latest();
+                    if let Ok(mut slot) = UPD_RESULT.lock() {
+                        *slot = Some(r);
+                    }
+                    unsafe {
+                        let _ = PostMessageW(Some(HWND(hwnd as *mut _)), WM_UPDATE_DONE, WPARAM(0), LPARAM(0));
+                    }
+                });
+            }
+            Act::InstallUpdate => {
+                if let Ok(exe) = std::env::current_exe() {
+                    let _ = std::process::Command::new(exe).args(["--update", "install"]).spawn();
+                }
             }
             Act::OpenDir(video) => {
                 crate::open_path(if video { &self.cfg.video_dir } else { &self.cfg.save_dir }, false)
@@ -1981,6 +2035,23 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             DefWindowProcW(hwnd, msg, wp, lp)
         }
         WM_SYSCHAR if with(|s| s.recording.is_some()) == Some(true) => LRESULT(0),
+        WM_UPDATE_DONE => {
+            let r = UPD_RESULT.lock().ok().and_then(|mut s| s.take());
+            with(|s| {
+                s.upd = match r {
+                    Some(Ok(v)) if crate::update::newer(&v) => {
+                        // the tray menu offers it too
+                        crate::ipc_send(crate::IPC_UPDATE, &v);
+                        Upd::New(v)
+                    }
+                    Some(Ok(_)) => Upd::Latest,
+                    Some(Err(e)) => Upd::Failed(e),
+                    None => Upd::Idle,
+                }
+            });
+            redraw(hwnd);
+            LRESULT(0)
+        }
         WM_TIMER if wp.0 == TIMER_TOAST => {
             let _ = KillTimer(Some(hwnd), TIMER_TOAST);
             with(|s| s.toast = None);

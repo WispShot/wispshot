@@ -1155,7 +1155,7 @@ impl St {
         let (head, line, pad) = (64.0, 32.0, 8.0);
         let bound: Vec<K> = TRAY_KEYS.iter().copied().filter(|k| !keys::display(self.cfg.key(*k)).is_empty()).collect();
         let apps = &self.cfg.pause_apps;
-        let open = |i: usize| self.open_app == Some(i) || apps.len() == 1;
+        let open = |i: usize| self.open_app == Some(i);
         let total: f32 =
             (0..apps.len()).map(|i| head + if open(i) { line * bound.len() as f32 + pad } else { 0.0 }).sum();
         rrect(rt, rc(x0, y, x1, y + total), 6.0, p.card, p.card_border);
@@ -1167,9 +1167,9 @@ impl St {
                 rrect(rt, rc(x0 + 1.0, y, x1 - 1.0, y + 1.0), 0.0, p.divider, 0);
             }
             let is_open = open(i);
-            // the header opens and closes the program's lines (with one program it stays open)
+            // the header opens and closes the program's lines
             let hr = rc(x0 + 6.0, y + 4.0, x1 - rw - 30.0, y + head - 4.0);
-            if apps.len() > 1 {
+            {
                 let act = Act::OpenApp(i);
                 if self.hover == Some(act) {
                     rrect(rt, hr, 4.0, p.hover, 0);

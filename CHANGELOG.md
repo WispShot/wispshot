@@ -17,7 +17,7 @@
   *Check now* button.
 - Programs that keep their own keys (*Settings > Shortcuts*): while one of them is in front, the shortcuts you
   choose for it go to that program (SAP uses F1, F3 and Shift+F1, which are also WispShot's defaults), and they
-  come back as soon as you switch away. Leave the others lit off and they keep working there, so you can still
+  come back as soon as you switch away. Switch the others off and they keep working there, so you can still
   take a screenshot in SAP with, say, `Ctrl+Shift+F1`. *Add program* lists the open programs by name and icon, or
   finds the program file. In the ini: `[hotkeys] pause_in_apps = C:\...\saplogon.exe | capture record, excel.exe`.
 

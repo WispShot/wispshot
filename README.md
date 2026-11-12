@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/media/capture.gif" width="720" alt="Selecting an area, marking it up with a box, numbered steps and an arrow, blurring a line of text, then copying it">
+  <img src="docs/media/capture.gif" width="720" alt="Selecting the Settings window, marking it up with a box, two numbered steps and an arrow, then copying it">
 </p>
 
 ## Why WispShot
@@ -113,7 +113,7 @@ A few things you won't find together anywhere else:
 - Works with rotated and portrait monitors, and records the cursor
 
 <p align="center">
-  <img src="docs/media/draw-on-recording.gif" width="640" alt="A recording with a box, an arrow and two step numbers drawn on it; the box and arrow fade after a few seconds, the numbers stay">
+  <img src="docs/media/draw-on-recording.gif" width="640" alt="A recording with a box, two step numbers and an arrow drawn on it while it runs; the box and arrow fade after a few seconds">
 </p>
 
 **Everything else**

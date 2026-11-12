@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/media/capture.gif" width="720" alt="Bir bölge seçilip çerçeve, numaralı adımlar ve okla işaretleniyor, bir satır bulanıklaştırılıyor, sonra kopyalanıyor">
+  <img src="docs/media/capture.gif" width="720" alt="Ayarlar penceresi seçilip bir kutu, iki numaralı adım ve bir okla işaretleniyor, sonra kopyalanıyor">
 </p>
 
 ## Neden WispShot
@@ -114,7 +114,7 @@ Başka bir araçta bir arada bulamayacağınız birkaç şey:
 - Döndürülmüş ve dikey monitörlerle çalışır, imleci de kaydeder
 
 <p align="center">
-  <img src="docs/media/draw-on-recording.gif" width="640" alt="Kaydın üzerine çerçeve, ok ve iki adım numarası çiziliyor; çerçeve ve ok birkaç saniyede siliniyor, numaralar kalıyor">
+  <img src="docs/media/draw-on-recording.gif" width="640" alt="Kayıt sürerken üzerine kutu, iki adım numarası ve ok çiziliyor; kutu ve ok birkaç saniyede siliniyor">
 </p>
 
 **Diğerleri**

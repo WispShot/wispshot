@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-12
+
 ### Added
 
 - *Take screenshots with Print Screen* (Settings > Shortcuts): Print Screen opens WispShot instead of the Windows

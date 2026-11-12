@@ -4,26 +4,30 @@
 
 ### Added
 
-- Print Screen as a shortcut: when you pick it in Settings while Windows uses the key for its own screen capture,
-  WispShot asks once whether it should take the key over and changes that Windows setting for you. Choose another
-  shortcut (or uninstall) and the key goes back to Windows.
+- *Take screenshots with Print Screen* (Settings > Shortcuts): Print Screen opens WispShot instead of the Windows
+  screen capture. WispShot turns off that Windows setting for you (it applies at once), and turning the switch off
+  again, or uninstalling, gives the key back.
 - Updates: once a day WispShot asks GitHub whether a new version is out and says so from the tray. One click
   downloads the setup, checks it against the release's SHA-256 list, installs it silently and starts WispShot
   again; your settings stay. The portable copy opens the release page. Turn it off under *Settings > General*
   (`[general] check_updates`). The check runs in a short-lived process, so the tray app stays as small as before.
-  Coming from 0.4.0 this is a one-time manual install, after that it updates itself.
-- Pause the shortcuts in chosen programs (*Settings > Shortcuts > Programs that keep their own keys*, or
-  `[hotkeys] pause_in_apps = saplogon.exe, excel.exe`). While one of them is in front, its own keys (SAP uses F1,
-  F3 and Shift+F1, which are also WispShot's defaults) go to it, and the shortcuts come back as soon as you switch
-  away. *Add program* lists the programs that have a window open, or finds the program file. The tray icon shows
-  the program they are paused for. A screenshot is still a click on the tray icon away.
+  Coming from 0.4.0 this is a one-time manual install, after that it updates itself. *Settings > About* has a
+  *Check now* button.
+- Programs that keep their own keys (*Settings > Shortcuts*): while one of them is in front, the shortcuts you
+  choose for it go to that program (SAP uses F1, F3 and Shift+F1, which are also WispShot's defaults), and they
+  come back as soon as you switch away. Leave the others lit off and they keep working there, so you can still
+  take a screenshot in SAP with, say, `Ctrl+Shift+F1`. *Add program* lists the open programs by name and icon, or
+  finds the program file. In the ini: `[hotkeys] pause_in_apps = C:\...\saplogon.exe | capture record, excel.exe`.
 
 ### Fixed
 
+- Settings: a description next to a wide row of options (*Delete old captures*, *Upload*) was cut off; the
+  options now sit under it.
 - On a new install `wispshot.ini` stayed empty until a setting was changed in the window (since 0.4.0).
 
 ### Changed
 
+- The tray menu says *Record a video* instead of *Record an area*.
 - Text recognition (OCR) reads Turkish and other languages with extra letters much better. It used to read with
   only the first language in your Windows list, so Turkish text on an English Windows came out garbled. Now it
   reads with your other Latin-script language first and switches to English when the text turns out to be

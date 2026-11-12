@@ -154,8 +154,10 @@ struct State {
     icon: HICON,
     icon_rec: HICON,
     recording: bool,
-    /// Hotkeys released because a full-screen app is in front.
+    /// Hotkeys released because a full-screen app, or an app from `pause_in_apps`, is in front.
     suspended: bool,
+    /// The `pause_in_apps` program in front (its exe name), when that is the reason.
+    paused_app: Option<String>,
     /// Released while the settings window records a new hotkey.
     held: bool,
     fg_hook: HWINEVENTHOOK,
@@ -280,6 +282,7 @@ fn resident(args: Vec<String>) {
             icon_rec: make_icon(small, true),
             recording: false,
             suspended: false,
+            paused_app: None,
             held: false,
             fg_hook: HWINEVENTHOOK::default(),
             loc_hook: HWINEVENTHOOK::default(),
@@ -373,7 +376,9 @@ fn watch_ini(app: HWND) {
 }
 
 fn watch_fullscreen() {
-    let Some((on, hook)) = with(|s| (s.cfg.pause_fullscreen, s.fg_hook)) else { return };
+    let Some((on, hook)) = with(|s| (s.cfg.pause_fullscreen || !s.cfg.pause_apps.is_empty(), s.fg_hook)) else {
+        return;
+    };
     unsafe {
         if on && hook.is_invalid() {
             let h = SetWinEventHook(
@@ -444,22 +449,55 @@ unsafe extern "system" fn on_location(_: HWINEVENTHOOK, _: u32, hwnd: HWND, obj:
 }
 
 fn check_fullscreen() {
-    let Some((on, was)) = with(|s| (s.cfg.pause_fullscreen, s.suspended)) else { return };
-    let now = on && foreground_is_fullscreen();
-    if now == was {
+    let Some((on, apps, was, was_app)) =
+        with(|s| (s.cfg.pause_fullscreen, s.cfg.pause_apps.clone(), s.suspended, s.paused_app.clone()))
+    else {
+        return;
+    };
+    let app_name = if apps.is_empty() { None } else { foreground_exe().filter(|e| apps.contains(e)) };
+    let full = app_name.is_none() && on && foreground_is_fullscreen();
+    let now = full || app_name.is_some();
+    if now == was && app_name == was_app {
         return;
     }
-    with(|s| s.suspended = now);
-    register_hotkeys(false);
+    with(|s| {
+        s.suspended = now;
+        s.paused_app = app_name;
+    });
+    if now != was {
+        register_hotkeys(false);
+    }
     tray(NIM_MODIFY);
     if let Some(app) = app_hwnd() {
         unsafe {
-            if now {
+            // leaving one of the listed apps always moves the focus; full screen may not
+            if full {
                 SetTimer(Some(app), TIMER_FULLSCREEN, 2000, None);
             } else {
                 let _ = KillTimer(Some(app), TIMER_FULLSCREEN);
             }
         }
+    }
+}
+
+/// The exe name of the foreground window's program, lowercase ("saplogon.exe").
+fn foreground_exe() -> Option<String> {
+    unsafe {
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(GetForegroundWindow(), Some(&mut pid));
+        if pid == 0 || pid == GetCurrentProcessId() {
+            return None;
+        }
+        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut buf = [0u16; 1024];
+        let mut n = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut n).is_ok();
+        let _ = CloseHandle(h);
+        if !ok {
+            return None;
+        }
+        let path = String::from_utf16_lossy(&buf[..n as usize]);
+        Some(path.rsplit('\\').next().unwrap_or(&path).to_lowercase())
     }
 }
 
@@ -506,6 +544,8 @@ fn tray(op: NOTIFY_ICON_MESSAGE) {
     let Some((icon, tip)) = with(|s| {
         let tip = if s.recording {
             tf("tray.tip_recording", &[&s.cfg.key_label(K::Record)])
+        } else if let Some(app) = &s.paused_app {
+            tf("tray.tip_paused_app", &[app])
         } else if s.suspended {
             t("tray.tip_paused").to_string()
         } else {

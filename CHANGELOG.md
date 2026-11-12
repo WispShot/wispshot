@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- Pause the shortcuts in chosen programs: `[hotkeys] pause_in_apps = saplogon.exe, excel.exe`. While one of them is
+  in front, its own keys (SAP uses F1, F3 and Shift+F1, which are also WispShot's defaults) go to it, and the
+  shortcuts come back as soon as you switch away. The tray icon shows the program they are paused for. A screenshot
+  is still a click on the tray icon away.
+
 ### Fixed
 
 - On a new install `wispshot.ini` stayed empty until a setting was changed in the window (since 0.4.0).

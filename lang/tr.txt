@@ -5,6 +5,7 @@
 tray.tip = WispShot (ekran görüntüsü için {0})
 tray.tip_recording = WispShot kayıt yapıyor. Durdurmak için {0} tuşuna basın ya da buraya tıklayın.
 tray.tip_paused = WispShot: tam ekran bir uygulama açıkken kısayollar duraklatıldı
+tray.tip_paused_app = WispShot: {0} öndeyken kısayollar duraklatıldı
 menu.capture = Ekran görüntüsü al
 menu.capture_delayed = Gecikmeli çekim ({0} sn)
 menu.record = Bir alanı kaydet
@@ -311,6 +312,7 @@ ini.header = WispShot ayarları. Bunları tepsi menüsündeki Ayarlar'dan da de�
 ini.language = system, en ya da tr
 ini.theme = system, light ya da dark
 ini.pause_fullscreen = Tam ekran oyun ve videolar kendi tuşlarını kullanabilsin
+ini.pause_apps = Kendi tuşlarını (F1, F3...) kullanacak programlar, virgülle: pause_in_apps = saplogon.exe, excel.exe
 ini.save_dir = Boş bırakılırsa Resimler\WispShot
 ini.save_mode = ask: her seferinde yer sor, folder: doğrudan save_dir'e kaydet
 ini.notify = Kaydedince bildirim göster

@@ -29,6 +29,9 @@ pub struct Config {
     pub theme: Theme,
     /// Release the hotkeys while a full-screen app (game, video) is in front.
     pub pause_fullscreen: bool,
+    /// Release the hotkeys while one of these programs is in front (lowercase exe names,
+    /// "saplogon.exe"): their own keys such as F1 or F3 keep working there.
+    pub pause_apps: Vec<String>,
     pub save_dir: PathBuf,
     /// true: ask for a location every time; false: save straight into `save_dir`.
     pub save_ask: bool,
@@ -118,6 +121,7 @@ fn default_ini() -> String {
         s += &format!("{} = {}\n", d.ini, d.default);
     }
     s += &format!("; {}\npause_in_fullscreen = true\n", t("ini.pause_fullscreen"));
+    s += &format!("; {}\npause_in_apps =\n", t("ini.pause_apps"));
     s += &format!(
         "\n[output]\n; {}\nsave_dir =\n; {}\nsave_mode = ask\n; {}\nnotify = true\n; {}\nformat = png\n; {}\njpeg_quality = 90\n; {}\nframe = off\n",
         t("ini.save_dir"),
@@ -220,6 +224,7 @@ pub fn save(cfg: &Config) -> std::io::Result<()> {
         ("general", "language", cfg.language.clone()),
         ("general", "theme", theme.to_string()),
         ("hotkeys", "pause_in_fullscreen", tf(cfg.pause_fullscreen)),
+        ("hotkeys", "pause_in_apps", cfg.pause_apps.join(", ")),
         ("output", "save_dir", dir(&cfg.save_dir, default_save_dir())),
         ("output", "save_mode", mode(cfg.save_ask)),
         ("output", "notify", tf(cfg.save_notify)),
@@ -358,6 +363,23 @@ fn parse_kv(text: &str) -> std::collections::HashMap<String, String> {
     kv
 }
 
+/// "SAPlogon, notepad.exe; C:\x\app.exe" -> ["saplogon.exe", "notepad.exe", "app.exe"].
+fn parse_apps(v: &str) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    for a in v.split([',', ';']) {
+        let a = a.trim().trim_matches('"');
+        let a = a.rsplit(['\\', '/']).next().unwrap_or(a).trim().to_lowercase();
+        if a.is_empty() {
+            continue;
+        }
+        let a = if a.ends_with(".exe") { a } else { a + ".exe" };
+        if !out.contains(&a) {
+            out.push(a);
+        }
+    }
+    out
+}
+
 /// Read wispshot.ini (creating it on first run) and apply language, theme and key
 /// bindings to this process.
 pub fn load() -> Config {
@@ -416,6 +438,7 @@ pub fn load() -> Config {
         language: get("general.language", "system"),
         theme,
         pause_fullscreen: b("hotkeys.pause_in_fullscreen", true),
+        pause_apps: parse_apps(&get("hotkeys.pause_in_apps", "")),
         save_dir: dir("output.save_dir", &FOLDERID_Pictures),
         save_ask: ask("output.save_mode", Some("output.quick_save"), true),
         save_notify: b("output.notify", true),

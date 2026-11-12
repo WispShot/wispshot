@@ -6,6 +6,7 @@
 tray.tip = WispShot ({0} to take a screenshot)
 tray.tip_recording = WispShot is recording. Press {0} or click here to stop.
 tray.tip_paused = WispShot: shortcuts are paused while a full-screen app is open
+tray.tip_paused_app = WispShot: shortcuts are paused while {0} is in front
 menu.capture = Take a screenshot
 menu.capture_delayed = Delayed screenshot ({0} s)
 menu.record = Record an area
@@ -312,6 +313,7 @@ ini.header = WispShot settings. You can also change them in the tray menu under 
 ini.language = system, en or tr
 ini.theme = system, light or dark
 ini.pause_fullscreen = Let full-screen games and videos keep their keys
+ini.pause_apps = Programs that keep their own keys (F1, F3...), comma-separated: pause_in_apps = saplogon.exe, excel.exe
 ini.save_dir = Empty means Pictures\WispShot
 ini.save_mode = ask: choose a place each time, folder: save straight to save_dir
 ini.notify = Show a notification after saving

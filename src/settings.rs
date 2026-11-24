@@ -33,6 +33,11 @@ const JUMP_H: f32 = 40.0;
 /// Sections of the Shortcuts page, for the jump bar (i18n keys).
 const JUMPS: [&str; 5] = ["keys.jump_apps", "keys.jump_global", "keys.jump_editor", "keys.jump_draw", "keys.jump_pin"];
 const TIMER_TOAST: usize = 1;
+/// Ends the outline around the setting a search result led to.
+const TIMER_FLASH: usize = 2;
+/// The search box in the side bar; the pages start under it.
+const SEARCH_BOX: (f32, f32) = (64.0, 96.0);
+const NAV_TOP: f32 = 108.0;
 /// The update check (its own thread) has a result in UPD_RESULT.
 const WM_UPDATE_DONE: u32 = WM_APP + 7;
 static UPD_RESULT: std::sync::Mutex<Option<std::result::Result<String, String>>> = std::sync::Mutex::new(None);
@@ -169,6 +174,11 @@ enum Act {
     BarTool(usize),
     BarAction(usize),
     CheckUpdates,
+    /// The search box (typing always goes there) and its clear button.
+    Search,
+    ClearSearch,
+    /// A search result: go to its page and show the setting.
+    Found(usize),
     /// Install the version the check found.
     InstallUpdate,
     Sponsor,
@@ -181,6 +191,40 @@ const PAGES: [(&str, char); 6] = [
     ("page.capture", '\u{F407}'),
     ("page.general", '\u{E713}'),
     ("page.about", '\u{E946}'),
+];
+/// Every card the search can find: page, title, sentence, and its switch (shown in the result).
+const FINDABLE: [(usize, &str, &str, Option<Tg>); 31] = [
+    (0, "keys.pause_fullscreen", "keys.pause_fullscreen_sub", Some(Tg::PauseFs)),
+    (0, "keys.print", "keys.print_sub", Some(Tg::PrintKey)),
+    (0, "keys.apps", "keys.apps_sub", None),
+    (0, "keys.reset", "", None),
+    (1, "shots.save", "shots.save_sub", None),
+    (1, "common.folder", "", None),
+    (1, "shots.notify", "shots.notify_sub", Some(Tg::SaveNotify)),
+    (1, "shots.format", "shots.format_sub", None),
+    (1, "shots.frame", "shots.frame_sub", None),
+    (1, "shots.upload", "shots.upload_sub", None),
+    (2, "video.save", "video.save_sub", None),
+    (2, "common.folder", "", None),
+    (2, "video.notify", "", Some(Tg::VideoNotify)),
+    (2, "video.format", "video.format_sub", None),
+    (2, "video.fps", "video.fps_sub", None),
+    (2, "video.cursor", "", Some(Tg::Cursor)),
+    (2, "video.fade", "video.fade_sub", Some(Tg::InkFade)),
+    (3, "capture.magnifier", "capture.magnifier_sub", Some(Tg::Magnifier)),
+    (3, "capture.detect", "capture.detect_sub", Some(Tg::Detect)),
+    (3, "capture.delay", "capture.delay_sub", None),
+    (3, "capture.history", "capture.history_sub", Some(Tg::History)),
+    (3, "capture.history_age", "capture.history_age_sub", None),
+    (3, "capture.bar", "capture.bar_sub", None),
+    (4, "general.language", "", None),
+    (4, "general.theme", "", None),
+    (4, "general.autostart", "general.autostart_sub", Some(Tg::Autostart)),
+    (4, "general.updates", "general.updates_sub", Some(Tg::Updates)),
+    (4, "general.ini", "general.ini_sub", None),
+    (5, "about.updates", "about.updates_sub", None),
+    (5, "about.memory", "", None),
+    (5, "about.support", "about.support_sub", None),
 ];
 const FPS: [u32; 4] = [15, 24, 30, 60];
 const DELAYS: [u32; 3] = [3, 5, 10];
@@ -260,6 +304,63 @@ pub(crate) fn pal(light: bool) -> Pal {
     }
 }
 
+/// A place on a page the search can lead to: a card (by its title) or a shortcut row.
+#[derive(Clone, PartialEq, Debug)]
+enum Spot {
+    Title(String),
+    Key(K),
+}
+
+/// One search result.
+struct Found {
+    page: usize,
+    title: String,
+    /// Where it lives: "Shortcuts › Editing".
+    ctx: String,
+    spot: Spot,
+    key: Option<K>,
+    tog: Option<Tg>,
+}
+
+/// Lower case without accents, so "kisayol" finds "Kısayol" and "ISO" finds "iso".
+fn fold(s: &str) -> String {
+    s.chars()
+        .flat_map(|c| c.to_lowercase())
+        .filter_map(|c| {
+            Some(match c {
+                'ı' | 'î' => 'i',
+                'ş' => 's',
+                'ğ' => 'g',
+                'ü' | 'û' => 'u',
+                'ö' => 'o',
+                'ç' => 'c',
+                'â' => 'a',
+                '\u{307}' => return None, // the dot of a lower-cased "İ"
+                c => c,
+            })
+        })
+        .collect()
+}
+
+/// Option names a card offers, so "GIF" or "dark" finds the card they are on.
+fn extras(title: &str) -> String {
+    let keys: Vec<&str> = match title {
+        "shots.frame" => vec!["frame.s_off", "frame.s_color", "frame.s_light", "frame.s_dark"],
+        "shots.upload" => vec!["upload.s_uguu", "upload.s_litter24", "upload.s_litter72"],
+        "capture.bar" => config::BAR_TOOLS.iter().chain(config::BAR_ACTIONS.iter()).map(|b| b.1).collect(),
+        "general.theme" => vec!["general.light", "general.dark"],
+        _ => vec![],
+    };
+    let mut out: Vec<&str> = keys.iter().map(|k| t(k)).collect();
+    match title {
+        "shots.format" => out.extend(output::Fmt::ALL.iter().map(|f| f.label())),
+        "video.format" => out.extend(["MP4", "GIF"]),
+        "general.language" => out.extend(i18n::LANGS.iter().map(|l| l.1)),
+        _ => {}
+    }
+    out.join(" ")
+}
+
 struct Fonts {
     title: IDWriteTextFormat,
     body: IDWriteTextFormat,
@@ -302,6 +403,14 @@ struct St {
     /// Where each Shortcuts section starts in the scrolling content (set while drawing).
     marks: std::cell::Cell<[f32; 5]>,
     upd: Upd,
+    /// What is typed in the search box; while it is not empty the results replace the page.
+    query: String,
+    results: Vec<Found>,
+    /// Where each findable thing was drawn (set while drawing).
+    spots: RefCell<Vec<(Spot, D2D_RECT_F)>>,
+    /// Scroll to this spot on the next frame, and outline it for a moment.
+    goto: Option<Spot>,
+    flash: Option<Spot>,
 }
 
 thread_local! {
@@ -448,6 +557,11 @@ pub fn open() -> bool {
                 open_app: None,
                 upd: Upd::Idle,
                 marks: std::cell::Cell::new([0.0; 5]),
+                query: String::new(),
+                results: vec![],
+                spots: RefCell::new(vec![]),
+                goto: None,
+                flash: None,
             })
         });
         with(|s| s.refresh_apps());
@@ -614,6 +728,15 @@ impl St {
             rt.SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
             let mut hits = vec![];
             self.content_h = self.draw(rt, &mut hits);
+            // a search result was opened: bring its setting into view, then draw again
+            if let Some(g) = self.goto.take() {
+                let at = self.spots.borrow().iter().find(|(s, _)| *s == g).map(|(_, r)| r.top);
+                if let Some(top) = at {
+                    self.scroll_by(top - self.view_top() - 40.0);
+                    hits.clear();
+                    self.content_h = self.draw(rt, &mut hits);
+                }
+            }
             self.hits = hits;
             if rt.EndDraw(None, None).is_err() {
                 self.rt = None;
@@ -641,11 +764,14 @@ impl St {
         self.logo(rt, 20.0, 22.0, 28.0);
         txt(rt, "WispShot", &f.body_b, rc(58.0, 18.0, NAV_W, 36.0), p.text);
         txt(rt, t("settings.title"), &f.sub, rc(58.0, 36.0, NAV_W, 52.0), p.sub);
-        let mut y = 80.0;
+        self.search_box(rt, hits);
+        let searching = !self.query.is_empty();
+        let mut y = NAV_TOP;
         for (i, (name, icon)) in PAGES.iter().enumerate() {
             let r = rc(8.0, y, NAV_W - 8.0, y + 38.0);
             let a = Act::Nav(i);
-            let bg = if self.page == i {
+            let here = self.page == i && !searching;
+            let bg = if here {
                 p.selected
             } else if self.hover == Some(a) {
                 p.hover
@@ -653,7 +779,7 @@ impl St {
                 0
             };
             rrect(rt, r, 5.0, bg, 0);
-            if self.page == i {
+            if here {
                 brand_bar(rt, rc(8.0, y + 11.0, 11.0, y + 27.0));
             }
             txt(rt, &icon.to_string(), &f.icon, rc(20.0, y, 44.0, y + 38.0), p.text);
@@ -666,18 +792,20 @@ impl St {
         // ---- page: fixed title, scrolling body
         let x0 = NAV_W + 32.0;
         let x1 = W - 32.0;
-        txt(rt, t(PAGES[self.page].0), &f.title, rc(x0, 18.0, x1, 64.0), p.text);
-        if self.page == 0 {
+        let head = if searching { t("search.results") } else { t(PAGES[self.page].0) };
+        txt(rt, head, &f.title, rc(x0, 18.0, x1, 64.0), p.text);
+        if self.page == 0 && !searching {
             let w = self.g.measure(t("keys.reset"), &f.body).0 + 32.0;
             self.button(rt, rc(x1 - w, 26.0, x1, 58.0), t("keys.reset"), Act::ResetKeys, hits);
         }
         let vt = self.view_top();
-        if self.page == 0 {
+        if self.page == 0 && !searching {
             self.jump_bar(rt, x0, hits);
         }
         let view = rc(NAV_W, vt, W, H);
         unsafe { rt.PushAxisAlignedClip(&view, D2D1_ANTIALIAS_MODE_ALIASED) };
         let mut body: Hits = vec![];
+        self.spots.borrow_mut().clear();
         let top = vt + 8.0 - self.scroll;
         let mut marks = [0.0f32; 5];
         let mut y = top;
@@ -700,6 +828,7 @@ impl St {
             };
             let r = rc(x0, *y, x1, *y + h);
             rrect(rt, r, 6.0, p.card, p.card_border);
+            st.spots.borrow_mut().push((Spot::Title(title.to_string()), r));
             if sub.is_empty() {
                 txt(rt, title, &f.body, rc(x0 + 18.0, *y, x1 - reserve, *y + h), p.text);
             } else {
@@ -710,7 +839,8 @@ impl St {
             ctl(st, if stacked { rc(r.left, r.top + 64.0, r.right, r.bottom - 6.0) } else { r }, hits);
             *y += h + 4.0;
         };
-        match self.page {
+        match if searching { usize::MAX } else { self.page } {
+            usize::MAX => y = self.draw_results(rt, y, &mut body),
             0 => {
                 marks[0] = y - top;
                 card(
@@ -751,6 +881,7 @@ impl St {
                     rrect(rt, rc(x0, y, x1, y + rh * rows.len() as f32), 6.0, p.card, p.card_border);
                     for (i, d) in rows.iter().enumerate() {
                         let r = rc(x0, y, x1, y + rh);
+                        self.spots.borrow_mut().push((Spot::Key(d.k), r));
                         if i > 0 {
                             rrect(rt, rc(x0 + 1.0, y, x1 - 1.0, y + 1.0), 0.0, p.divider, 0);
                         }
@@ -958,6 +1089,13 @@ impl St {
             }
         }
         let content_h = y - top + 8.0;
+        // the setting a search result led to, outlined for a moment
+        if let Some(fl) = &self.flash {
+            if let Some((_, r)) = self.spots.borrow().iter().find(|(s, _)| s == fl) {
+                rrect(rt, *r, 6.0, 0, p.accent);
+                rrect(rt, rc(r.left + 1.0, r.top + 1.0, r.right - 1.0, r.bottom - 1.0), 5.0, 0, p.accent);
+            }
+        }
         unsafe { rt.PopAxisAlignedClip() };
         // only what is visible can be clicked
         for (r, a) in body {
@@ -1079,6 +1217,7 @@ impl St {
         let (acts, end_a) = place(&config::BAR_ACTIONS, end_t + 34.0);
         let h = end_a - y + 16.0;
         rrect(rt, rc(x0, y, x1, y + h), 6.0, p.card, p.card_border);
+        self.spots.borrow_mut().push((Spot::Title(t("capture.bar").to_string()), rc(x0, y, x1, y + h)));
         txt(rt, t("capture.bar"), &f.body, rc(x0 + 18.0, y + 13.0, x1 - 18.0, y + 35.0), p.text);
         txt(
             rt,
@@ -1112,11 +1251,188 @@ impl St {
 
     /// Top of the scrolling area on the current page.
     fn view_top(&self) -> f32 {
-        if self.page == 0 {
+        if self.page == 0 && self.query.is_empty() {
             VIEW_TOP + JUMP_H
         } else {
             VIEW_TOP
         }
+    }
+
+    /// The search box at the top of the side bar: a magnifier, the text (or a hint) with a caret,
+    /// and a clear button once something is typed.
+    fn search_box(&self, rt: &ID2D1RenderTarget, hits: &mut Hits) {
+        let Some(f) = &self.f else { return };
+        let p = &self.p;
+        let r = rc(12.0, SEARCH_BOX.0, NAV_W - 12.0, SEARCH_BOX.1);
+        let mine = unsafe { GetForegroundWindow() } == self.hwnd;
+        rrect(rt, r, 5.0, p.card, p.btn_border);
+        if mine {
+            // the line under the box, in the accent: this is where typing goes
+            rrect(rt, rc(r.left + 1.0, r.bottom - 2.0, r.right - 1.0, r.bottom - 0.5), 1.0, p.accent, 0);
+        }
+        hits.push((r, Act::Search));
+        if let Ok(small) = self.g.icon_format(12.0) {
+            txt(rt, "\u{E721}", &small, rc(r.left + 11.0, r.top, r.left + 30.0, r.bottom), p.sub);
+            if !self.query.is_empty() {
+                let x = rc(r.right - 30.0, r.top + 4.0, r.right - 4.0, r.bottom - 4.0);
+                if self.hover == Some(Act::ClearSearch) {
+                    rrect(rt, x, 4.0, p.hover, 0);
+                }
+                txt(rt, "\u{E711}", &small, rc(x.left + 7.0, x.top, x.right, x.bottom), p.sub);
+                hits.push((x, Act::ClearSearch));
+            }
+        }
+        let tx = r.left + 34.0;
+        let room = rc(tx, r.top, r.right - 32.0, r.bottom);
+        if self.query.is_empty() {
+            txt(rt, t("search.hint"), &f.sub, room, p.sub);
+        } else {
+            txt(rt, &self.query, &f.sub, room, p.text);
+        }
+        if mine {
+            let cx = (tx + self.g.measure(&self.query, &f.sub).0 + 1.0).min(room.right);
+            rrect(rt, rc(cx, r.top + 9.0, cx + 1.0, r.bottom - 9.0), 0.0, p.text, 0);
+        }
+    }
+
+    /// Search results in one card: name and place of each match; a shortcut shows its key field
+    /// and a switch its switch, so both can be changed right here; the rest open their page.
+    fn draw_results(&self, rt: &ID2D1RenderTarget, mut y: f32, hits: &mut Hits) -> f32 {
+        let Some(f) = &self.f else { return y };
+        let p = &self.p;
+        let (x0, x1) = (NAV_W + 32.0, W - 32.0);
+        if self.results.is_empty() {
+            txt(rt, &tf("search.none", &[&self.query]), &f.body, rc(x0 + 4.0, y, x1, y + 30.0), p.sub);
+            return y + 34.0;
+        }
+        let rh = 58.0;
+        let vt = self.view_top();
+        rrect(rt, rc(x0, y, x1, y + rh * self.results.len() as f32), 6.0, p.card, p.card_border);
+        for (i, r) in self.results.iter().enumerate() {
+            let row = rc(x0, y, x1, y + rh);
+            if i > 0 {
+                rrect(rt, rc(x0 + 1.0, y, x1 - 1.0, y + 1.0), 0.0, p.divider, 0);
+            }
+            if row.bottom > vt && row.top < H {
+                let a = Act::Found(i);
+                if self.hover == Some(a) {
+                    rrect(rt, rc(x0 + 4.0, y + 4.0, x1 - 4.0, y + rh - 4.0), 4.0, p.hover, 0);
+                }
+                let reserve = if r.key.is_some() {
+                    190.0
+                } else if r.tog.is_some() {
+                    140.0
+                } else {
+                    50.0
+                };
+                txt(rt, &r.title, &f.body, rc(x0 + 18.0, y + 9.0, x1 - reserve, y + 31.0), p.text);
+                txt(rt, &r.ctx, &f.sub, rc(x0 + 18.0, y + 31.0, x1 - reserve, y + 50.0), p.sub);
+                hits.push((row, a));
+                match (r.key, r.tog) {
+                    (Some(k), _) => self.hotkey(rt, row, k, hits),
+                    (_, Some(tg)) => self.toggle(rt, row, tg, hits),
+                    _ => txt(rt, "\u{E76C}", &f.icon, rc(x1 - 38.0, y, x1 - 12.0, y + rh), p.sub),
+                }
+            }
+            y += rh;
+        }
+        y + 4.0
+    }
+
+    /// Fill `results` from `query`: every word must appear in the name, the sentence, the page
+    /// or (for shortcuts) the key; names that start with the text come first.
+    fn find(&mut self) {
+        self.scroll = 0.0;
+        self.results.clear();
+        let q = fold(self.query.trim());
+        let words: Vec<&str> = q.split_whitespace().collect();
+        if words.is_empty() {
+            return;
+        }
+        let mut out: Vec<(u8, Found)> = vec![];
+        let mut consider = |f: Found, more: String| {
+            let title = fold(&f.title);
+            let hay = fold(&format!("{} {} {}", f.title, f.ctx, more));
+            if words.iter().all(|w| hay.contains(w)) {
+                let rank = if title.starts_with(q.as_str()) {
+                    0
+                } else if words.iter().all(|w| title.contains(w)) {
+                    1
+                } else {
+                    2
+                };
+                out.push((rank, f));
+            }
+        };
+        for (page, title, sub, tog) in FINDABLE {
+            let name = t(title).to_string();
+            let more = format!("{} {}", if sub.is_empty() { "" } else { t(sub) }, extras(title));
+            let f = Found {
+                page,
+                title: name.clone(),
+                ctx: t(PAGES[page].0).to_string(),
+                spot: Spot::Title(name),
+                key: None,
+                tog,
+            };
+            consider(f, more);
+        }
+        for d in DEFS.iter() {
+            let group = GROUPS.iter().find(|g| g.0 == d.scope).map(|g| t(g.1)).unwrap_or("");
+            let f = Found {
+                page: 0,
+                title: t(label_key(d.k)).to_string(),
+                ctx: format!("{} › {}", t(PAGES[0].0), group),
+                spot: Spot::Key(d.k),
+                key: Some(d.k),
+                tog: None,
+            };
+            consider(f, keys::display(self.cfg.key(d.k)));
+        }
+        out.sort_by_key(|o| o.0);
+        self.results = out.into_iter().map(|o| o.1).collect();
+    }
+
+    /// A character typed into the search box; true when the text changed.
+    fn type_char(&mut self, c: u32) -> bool {
+        match c {
+            0x08 => {
+                if self.query.pop().is_none() {
+                    return false;
+                }
+            }
+            // Ctrl+Backspace: the last word
+            0x7F => {
+                let keep = self.query.trim_end().rfind(' ').map(|i| i + 1).unwrap_or(0);
+                if keep == self.query.len() {
+                    return false;
+                }
+                self.query.truncate(keep);
+            }
+            // Ctrl+V: the first line of the clipboard
+            0x16 => {
+                let Some(text) = output::clipboard_text(self.hwnd) else { return false };
+                let line = text.lines().next().unwrap_or("").trim();
+                if line.is_empty() {
+                    return false;
+                }
+                self.query.push_str(line);
+            }
+            c if c >= 0x20 => match char::from_u32(c) {
+                Some(ch) => self.query.push(ch),
+                None => return false,
+            },
+            _ => return false,
+        }
+        self.query = self.query.chars().take(60).collect();
+        self.find();
+        true
+    }
+
+    fn clear_search(&mut self) {
+        self.query.clear();
+        self.results.clear();
+        self.scroll = 0.0;
     }
 
     /// The row of section buttons under the Shortcuts title; the section in view is lit.
@@ -1338,6 +1654,7 @@ impl St {
         let (head, rh) = (if two { 84.0 } else { 64.0 }, 52.0);
         let h = head + rh * opts.len() as f32 + 8.0;
         rrect(rt, rc(x0, y, x1, y + h), 6.0, p.card, p.card_border);
+        self.spots.borrow_mut().push((Spot::Title(title.to_string()), rc(x0, y, x1, y + h)));
         txt(rt, title, &f.body, rc(x0 + 18.0, y + 13.0, x1 - 18.0, y + 35.0), p.text);
         txt(rt, sub, if two { &f.wrap } else { &f.sub }, rc(x0 + 18.0, y + 37.0, x1 - 18.0, y + head - 4.0), p.sub);
         let sel = self.seg_val(s);
@@ -1551,9 +1868,24 @@ impl St {
         }
         match a {
             Act::Nav(i) => {
-                if self.page != i {
+                if self.page != i || !self.query.is_empty() {
+                    self.clear_search();
                     self.page = i;
                     self.scroll = 0.0;
+                }
+            }
+            Act::Search => {}
+            Act::ClearSearch => self.clear_search(),
+            Act::Found(i) => {
+                let Some(r) = self.results.get(i) else { return };
+                let (page, spot) = (r.page, r.spot.clone());
+                self.clear_search();
+                self.page = page;
+                self.picking = None;
+                self.goto = Some(spot.clone());
+                self.flash = Some(spot);
+                unsafe {
+                    SetTimer(Some(self.hwnd), TIMER_FLASH, 1800, None);
                 }
             }
             Act::Key(k) => {
@@ -1955,7 +2287,11 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             let mut p = POINT::default();
             let _ = GetCursorPos(&mut p);
             let _ = ScreenToClient(hwnd, &mut p);
-            let c = if hit(p.x, p.y).is_some() { IDC_HAND } else { IDC_ARROW };
+            let c = match hit(p.x, p.y) {
+                Some(Act::Search) => IDC_IBEAM,
+                Some(_) => IDC_HAND,
+                None => IDC_ARROW,
+            };
             if let Ok(c) = LoadCursorW(None, c) {
                 SetCursor(Some(c));
             }
@@ -2007,18 +2343,40 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
         WM_KEYDOWN | WM_SYSKEYDOWN => {
             let vk = wp.0 as u16;
             if with(|s| s.record_key(vk)) == Some(true) {
+                // the key's character must not land in the search box
+                let mut m = MSG::default();
+                while PeekMessageW(&mut m, Some(hwnd), WM_CHAR, WM_DEADCHAR, PM_REMOVE).as_bool() {}
+                while PeekMessageW(&mut m, Some(hwnd), WM_SYSCHAR, WM_SYSDEADCHAR, PM_REMOVE).as_bool() {}
                 redraw(hwnd);
                 return LRESULT(0);
             }
+            let searching = with(|s| !s.query.is_empty()) == Some(true);
             match VIRTUAL_KEY(vk) {
+                // Esc empties the search first, then closes
+                VK_ESCAPE if msg == WM_KEYDOWN && searching => {
+                    with(|s| s.clear_search());
+                    redraw(hwnd);
+                    return LRESULT(0);
+                }
                 VK_ESCAPE if msg == WM_KEYDOWN => {
                     let _ = DestroyWindow(hwnd);
+                    return LRESULT(0);
+                }
+                // Enter opens the first result
+                VK_RETURN if msg == WM_KEYDOWN && searching => {
+                    with(|s| {
+                        if !s.results.is_empty() {
+                            s.act(Act::Found(0));
+                        }
+                    });
+                    redraw(hwnd);
                     return LRESULT(0);
                 }
                 // Ctrl+Tab / Ctrl+Shift+Tab: next / previous page
                 VK_TAB if GetKeyState(VK_CONTROL.0 as i32) < 0 => {
                     let back = GetKeyState(VK_SHIFT.0 as i32) < 0;
                     with(|s| {
+                        s.clear_search();
                         s.page = (s.page + if back { PAGES.len() - 1 } else { 1 }) % PAGES.len();
                         s.scroll = 0.0;
                     });
@@ -2041,6 +2399,21 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             DefWindowProcW(hwnd, msg, wp, lp)
         }
         WM_SYSCHAR if with(|s| s.recording.is_some()) == Some(true) => LRESULT(0),
+        // typing goes to the search box (a shortcut field that is waiting takes keys instead)
+        WM_CHAR => {
+            if with(|s| s.recording.is_none() && s.type_char(wp.0 as u32)) == Some(true) {
+                with(|s| s.render());
+                refresh_hover(hwnd);
+                redraw(hwnd);
+            }
+            LRESULT(0)
+        }
+        WM_TIMER if wp.0 == TIMER_FLASH => {
+            let _ = KillTimer(Some(hwnd), TIMER_FLASH);
+            with(|s| s.flash = None);
+            redraw(hwnd);
+            LRESULT(0)
+        }
         WM_UPDATE_DONE => {
             let r = UPD_RESULT.lock().ok().and_then(|mut s| s.take());
             with(|s| {
@@ -2063,6 +2436,11 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             with(|s| s.toast = None);
             redraw(hwnd);
             LRESULT(0)
+        }
+        // the caret and the line under the search box follow the window being in front
+        WM_ACTIVATE if (wp.0 & 0xFFFF) as u32 != WA_INACTIVE => {
+            redraw(hwnd);
+            DefWindowProcW(hwnd, msg, wp, lp)
         }
         WM_ACTIVATE if (wp.0 & 0xFFFF) as u32 == WA_INACTIVE => {
             with(|s| s.stop_recording());

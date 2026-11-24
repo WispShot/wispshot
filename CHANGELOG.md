@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+
+- Settings has a search box: start typing anywhere in the window to find a setting or a shortcut by its name, its
+  description or its key (accents optional, so "kisayol" finds "Kısayol"). Shortcuts and switches can be changed
+  right in the results; any other result (or Enter for the first one) opens its page and outlines the setting.
+  Esc clears the search.
+
+### Fixed
+
+- Start with Windows: when the taskbar is not ready yet at sign-in, the tray icon is retried for a minute
+  instead of staying missing (WispShot ran, but looked as if it had not started).
+- Start with Windows shows On only when Windows will really start this copy: not when it was turned off under
+  Task Manager / Settings > Apps > Startup (turning it on in WispShot now turns that back on too), and not when
+  the entry points to another copy.
+- A portable copy moved to another folder points the Start with Windows entry to its new place.
+
 ## [0.4.3] - 2026-11-12
 
 ### Added

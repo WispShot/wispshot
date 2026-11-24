@@ -189,6 +189,10 @@ const TIMER_CANCEL_DELAY: usize = 3;
 const TIMER_EXPIRE: usize = 4;
 /// Ask for a newer version two minutes after start, then once a day.
 const TIMER_UPDATE: usize = 5;
+/// The tray icon could not be added (at sign-in the taskbar may not be ready yet): try again.
+const TIMER_TRAY: usize = 6;
+/// Retries of a failed tray icon, 2 s apart (one minute in all).
+static TRAY_TRIES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 /// The balloon click target of an update notice.
 const UPDATE_MARK: &str = "wispshot:update";
 
@@ -315,7 +319,7 @@ fn resident(args: Vec<String>) {
             update: None,
         };
         ST.with(|s| *s.borrow_mut() = Some(state));
-        tray(NIM_ADD);
+        tray_add();
         register_hotkeys(true);
         watch_fullscreen();
         output::clean_temp();
@@ -576,8 +580,21 @@ fn foreground_is_fullscreen() -> bool {
 
 // ------------------------------------------------------------------- tray
 
-fn tray(op: NOTIFY_ICON_MESSAGE) {
-    let Some(app) = app_hwnd() else { return };
+/// Put the icon in the tray; when the taskbar is not there yet (early at sign-in), keep trying
+/// for a minute: the app runs either way, but without the icon it looks as if it never started.
+fn tray_add() {
+    if !tray(NIM_ADD) && !tray(NIM_MODIFY) {
+        if let Some(app) = app_hwnd() {
+            TRAY_TRIES.store(0, Ordering::Relaxed);
+            unsafe {
+                SetTimer(Some(app), TIMER_TRAY, 2000, None);
+            }
+        }
+    }
+}
+
+fn tray(op: NOTIFY_ICON_MESSAGE) -> bool {
+    let Some(app) = app_hwnd() else { return false };
     let Some((icon, tip)) = with(|s| {
         let tip = if s.recording {
             tf("tray.tip_recording", &[&s.cfg.key_label(K::Record)])
@@ -590,7 +607,7 @@ fn tray(op: NOTIFY_ICON_MESSAGE) {
         };
         (if s.recording { s.icon_rec } else { s.icon }, tip)
     }) else {
-        return;
+        return false;
     };
     let mut nid = NOTIFYICONDATAW {
         cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
@@ -603,11 +620,12 @@ fn tray(op: NOTIFY_ICON_MESSAGE) {
     };
     copy_w(&mut nid.szTip, &tip);
     unsafe {
-        let _ = Shell_NotifyIconW(op, &nid);
-        if op == NIM_ADD {
+        let ok = Shell_NotifyIconW(op, &nid).as_bool();
+        if ok && op == NIM_ADD {
             nid.Anonymous.uVersion = NOTIFYICON_VERSION_4;
             let _ = Shell_NotifyIconW(NIM_SETVERSION, &nid);
         }
+        ok
     }
 }
 
@@ -796,23 +814,87 @@ fn tray_menu() {
 
 const RUN_KEY: PCWSTR = w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
 
+/// Where Windows keeps the on/off switch of each startup app (Task Manager > Startup apps,
+/// Settings > Apps > Startup). A value whose first byte is odd means "turned off there".
+const APPROVED_KEY: PCWSTR = w!("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run");
+
 /// Pre-0.2 builds registered "Wisp": re-register under the new name for this exe.
+/// A registration whose exe is gone (a portable copy moved to another folder) points here again.
 fn migrate_autostart() {
     unsafe {
-        if RegGetValueW(HKEY_CURRENT_USER, RUN_KEY, w!("Wisp"), RRF_RT_REG_SZ, None, None, None).is_err() {
+        if RegGetValueW(HKEY_CURRENT_USER, RUN_KEY, w!("Wisp"), RRF_RT_REG_SZ, None, None, None).is_ok() {
+            set_autostart(true);
+            let mut key = HKEY::default();
+            if RegOpenKeyExW(HKEY_CURRENT_USER, RUN_KEY, Some(0), KEY_SET_VALUE, &mut key).is_ok() {
+                let _ = RegDeleteValueW(key, w!("Wisp"));
+                let _ = RegCloseKey(key);
+            }
             return;
         }
-        set_autostart(true);
-        let mut key = HKEY::default();
-        if RegOpenKeyExW(HKEY_CURRENT_USER, RUN_KEY, Some(0), KEY_SET_VALUE, &mut key).is_ok() {
-            let _ = RegDeleteValueW(key, w!("Wisp"));
-            let _ = RegCloseKey(key);
+    }
+    if let Some(p) = run_target() {
+        if !p.is_file() && !run_disabled() {
+            set_autostart(true);
         }
     }
 }
 
+/// The exe our Run value starts, without its quotes.
+fn run_target() -> Option<PathBuf> {
+    unsafe {
+        let mut buf = [0u16; 1024];
+        let mut len = (buf.len() * 2) as u32;
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            RUN_KEY,
+            w!("WispShot"),
+            RRF_RT_REG_SZ,
+            None,
+            Some(buf.as_mut_ptr() as *mut _),
+            Some(&mut len),
+        )
+        .ok()
+        .ok()?;
+        let n = buf.iter().position(|c| *c == 0).unwrap_or(buf.len());
+        let v = String::from_utf16_lossy(&buf[..n]);
+        let v = v.trim();
+        let path = match v.strip_prefix('"') {
+            Some(rest) => rest.split('"').next().unwrap_or(rest),
+            None => v,
+        };
+        Some(PathBuf::from(path))
+    }
+}
+
+/// Turned off in Task Manager / Settings > Apps > Startup: the Run value stays, Windows skips it.
+fn run_disabled() -> bool {
+    unsafe {
+        let mut b = [0u8; 12];
+        let mut len = b.len() as u32;
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            APPROVED_KEY,
+            w!("WispShot"),
+            RRF_RT_REG_BINARY,
+            None,
+            Some(b.as_mut_ptr() as *mut _),
+            Some(&mut len),
+        )
+        .is_ok()
+            && len > 0
+            && b[0] & 1 == 1
+    }
+}
+
+/// On only when Windows will really start this copy: our Run value points to this exe
+/// and the app is not turned off under Startup apps.
 pub fn autostart_enabled() -> bool {
-    unsafe { RegGetValueW(HKEY_CURRENT_USER, RUN_KEY, w!("WispShot"), RRF_RT_REG_SZ, None, None, None).is_ok() }
+    let Some(target) = run_target() else { return false };
+    let me = std::env::current_exe().unwrap_or_default();
+    let same = |a: &std::path::Path, b: &std::path::Path| {
+        a.as_os_str().to_string_lossy().eq_ignore_ascii_case(&b.as_os_str().to_string_lossy())
+    };
+    same(&target, &me) && !run_disabled()
 }
 
 pub fn set_autostart(on: bool) {
@@ -830,6 +912,12 @@ pub fn set_autostart(on: bool) {
             let _ = RegDeleteValueW(key, w!("WispShot"));
         }
         let _ = RegCloseKey(key);
+        // turning it on here also undoes an earlier "off" under Startup apps (no value = on)
+        let mut key = HKEY::default();
+        if RegOpenKeyExW(HKEY_CURRENT_USER, APPROVED_KEY, Some(0), KEY_SET_VALUE, &mut key).is_ok() {
+            let _ = RegDeleteValueW(key, w!("WispShot"));
+            let _ = RegCloseKey(key);
+        }
     }
 }
 
@@ -1082,6 +1170,12 @@ unsafe extern "system" fn app_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             }
             LRESULT(0)
         }
+        WM_TIMER if wp.0 == TIMER_TRAY => {
+            if tray(NIM_ADD) || tray(NIM_MODIFY) || TRAY_TRIES.fetch_add(1, Ordering::Relaxed) >= 30 {
+                let _ = KillTimer(Some(hwnd), wp.0);
+            }
+            LRESULT(0)
+        }
         WM_TIMER if wp.0 == TIMER_EXPIRE => {
             history::expire(with(|s| s.cfg.history_days).unwrap_or(0));
             LRESULT(0)
@@ -1164,7 +1258,7 @@ unsafe extern "system" fn app_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             let tc = with(|s| s.taskbar_created).unwrap_or(0);
             if msg == tc && tc != 0 {
                 // Explorer restarted: put the icon back (stability)
-                tray(NIM_ADD);
+                tray_add();
                 return LRESULT(0);
             }
             DefWindowProcW(hwnd, msg, wp, lp)

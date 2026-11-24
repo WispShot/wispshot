@@ -354,9 +354,9 @@ pub fn save(cfg: &Config) -> std::io::Result<()> {
         ("upload", "field", cfg.upload_field.clone()),
         ("upload", "asked", tf(cfg.upload_asked)),
     ];
-    for i in 0..DEFS.len() {
+    for (i, key) in cfg.keys.iter().enumerate().take(DEFS.len()) {
         let (sect, name) = key_place(i);
-        vals.push((sect, name, cfg.keys[i].clone()));
+        vals.push((sect, name, key.clone()));
     }
     let text = set_values(&read_ini(), &vals, &["output.quick_save"]);
     std::fs::write(ini_path(), text)

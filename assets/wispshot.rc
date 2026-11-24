@@ -12,8 +12,8 @@ BEGIN
     BEGIN
       VALUE "FileDescription", "WispShot screenshot tool"
       VALUE "ProductName", "WispShot"
-      VALUE "FileVersion", "0.4.3"
-      VALUE "ProductVersion", "0.4.3"
+      VALUE "FileVersion", "0.4.4"
+      VALUE "ProductVersion", "0.4.4"
       VALUE "OriginalFilename", "wispshot.exe"
       VALUE "InternalName", "wispshot"
       VALUE "CompanyName", "Efe Kaputlu"

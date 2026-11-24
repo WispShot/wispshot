@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-11-24
+
 ### Added
 
 - Settings has a search box: start typing anywhere in the window to find a setting or a shortcut by its name, its
